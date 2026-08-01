@@ -45,7 +45,22 @@ docker compose up -d --build
 
 Abra `http://IP-DO-SERVIDOR:8080`.
 
-O compose usa `network_mode: host` para o container enxergar o Kindle na LAN sem NAT extra.
+O compose publica a porta `${PORT:-8080}` e o container alcança o Kindle pela LAN do host (bridge). Se a porta estiver ocupada, mude `PORT` no `.env`.
+
+### Se o container ficar reiniciando
+
+```bash
+docker compose logs --tail 100
+docker compose ps
+```
+
+Causas comuns: porta 8080 em uso, `.env` com valores inválidos, ou erro de import na build antiga. Depois de atualizar o código:
+
+```bash
+docker compose down
+docker compose up -d --build
+```
+
 
 Logs:
 
