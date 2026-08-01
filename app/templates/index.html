@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ScreensaverKindle</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}" />
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+  <main class="shell">
+    <header class="brand">
+      <p class="eyebrow">Paperwhite · {{ width }}×{{ height }}</p>
+      <h1>ScreensaverKindle</h1>
+      <p class="lede">Envie uma imagem. O servidor converte para e-ink e empurra para o Kindle via SSH.</p>
+    </header>
+
+    <section class="stage" aria-label="Upload e preview">
+      <div class="dropzone" id="dropzone">
+        <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp,image/bmp,image/gif" hidden />
+        <p class="drop-title">Solte uma imagem aqui</p>
+        <p class="drop-hint">ou</p>
+        <button type="button" class="btn ghost" id="pickBtn">Escolher imagem</button>
+      </div>
+
+      <figure class="preview-frame" data-empty="{{ 'false' if has_current else 'true' }}">
+        <img id="preview" src="{{ '/preview' if has_current else '' }}" alt="Preview e-ink" {% if not has_current %}hidden{% endif %} />
+        <figcaption id="previewCaption">{{ 'Preview convertido' if has_current else 'Aguardando imagem' }}</figcaption>
+      </figure>
+    </section>
+
+    <section class="controls">
+      <button type="button" class="btn primary" id="pushBtn" {% if not has_current %}disabled{% endif %}>
+        Enviar para Kindle
+      </button>
+      <p class="target">Destino: <code>{{ host }}</code></p>
+    </section>
+
+    <ul class="status" id="statusList" aria-live="polite">
+      <li data-key="converted" class="{% if has_current %}done{% endif %}">Convertida</li>
+      <li data-key="transferred">Transferida</li>
+      <li data-key="displayed">Exibida</li>
+    </ul>
+    <p class="message" id="message" role="status"></p>
+  </main>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

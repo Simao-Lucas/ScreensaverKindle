@@ -1,0 +1,12 @@
+services:
+  screensaverkindle:
+    build: .
+    container_name: screensaverkindle
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    environment:
+      - PORT=8080
