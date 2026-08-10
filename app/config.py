@@ -46,6 +46,7 @@ class Config:
     KINDLE_PORT = _env_int("KINDLE_PORT", 2222)
     KINDLE_USER = _env("KINDLE_USER", "root") or "root"
     KINDLE_PASSWORD = _env("KINDLE_PASSWORD", "")
+    KINDLE_SSH_KEY = _env("KINDLE_SSH_KEY", "/keys/id_rsa")
     KINDLE_SSH_TIMEOUT = _env_int("KINDLE_SSH_TIMEOUT", 20)
     # Pasta apontada no KOReader: Screen → Screensaver → pasta customizada
     KINDLE_REMOTE_PATH = _env(

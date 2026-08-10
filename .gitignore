@@ -1,4 +1,6 @@
 .env
+secrets/*
+!secrets/.gitkeep
 data/uploads/*
 !data/uploads/.gitkeep
 __pycache__/

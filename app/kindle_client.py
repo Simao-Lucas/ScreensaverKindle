@@ -16,7 +16,8 @@ class KindleClient:
     host: str
     port: int
     username: str
-    password: str
+    password: str = ""
+    key_path: str = ""
     timeout: int = 20
     remote_path: str = "/mnt/us/screensaver/current.png"
     refresh_cmd: str = ""
@@ -25,23 +26,38 @@ class KindleClient:
     def _connect(self) -> paramiko.SSHClient:
         if not self.host:
             raise KindleError("KINDLE_HOST não configurado.")
-        if not self.password:
-            raise KindleError("KINDLE_PASSWORD não configurado.")
+
+        key_file = self.key_path.strip()
+        if key_file and not Path(key_file).is_file():
+            # Sem arquivo = tenta senha (inclusive vazia, comum no Kindle).
+            key_file = ""
 
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        connect_kwargs: dict = {
+            "hostname": self.host,
+            "port": self.port,
+            "username": self.username,
+            "timeout": self.timeout,
+            "allow_agent": False,
+            "look_for_keys": False,
+        }
+        if key_file:
+            connect_kwargs["key_filename"] = key_file
+            if self.password:
+                connect_kwargs["password"] = self.password
+        else:
+            # Senha vazia é válida em muitos Kindles jailbroken (dropbear).
+            connect_kwargs["password"] = self.password
+
         try:
-            client.connect(
-                hostname=self.host,
-                port=self.port,
-                username=self.username,
-                password=self.password,
-                timeout=self.timeout,
-                allow_agent=False,
-                look_for_keys=False,
-            )
+            client.connect(**connect_kwargs)
         except paramiko.AuthenticationException as exc:
-            raise KindleError("Falha de autenticação SSH (usuário/senha).") from exc
+            raise KindleError(
+                "Falha de autenticação SSH. "
+                "Se no terminal não pede senha, copie a chave para secrets/id_rsa "
+                "ou confirme se o Kindle aceita senha vazia."
+            ) from exc
         except (socket.timeout, TimeoutError) as exc:
             raise KindleError(
                 f"Timeout ao conectar em {self.host}:{self.port}."
@@ -70,7 +86,6 @@ class KindleClient:
         """Keep only the new wallpaper so KOReader random_image always picks it."""
         if not self.clear_screensaver_dir:
             return
-        # Remove common image types; leave the directory itself.
         cmd = (
             f'find "{self.remote_dir}" -maxdepth 1 -type f '
             r'\( -iname "*.png" -o -iname "*.jpg" -o -iname "*.jpeg" \) -delete'
