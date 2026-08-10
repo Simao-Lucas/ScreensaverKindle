@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ScreensaverKindle</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}" />
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+  <main class="shell home-shell">
+    <header class="brand">
+      <p class="eyebrow">Kindle · jailbreak · KOReader</p>
+      <h1>ScreensaverKindle</h1>
+      <p class="lede">Envie livros para a biblioteca ou atualize o screensaver e-ink — pelo mesmo painel.</p>
+    </header>
+
+    <nav class="home-nav" aria-label="Destinos">
+      <a class="home-link" href="{{ url_for('main.books_page') }}">
+        <span class="home-link-kicker">Biblioteca</span>
+        <span class="home-link-title">Enviar Livro</span>
+        <span class="home-link-copy">Converte (EPUB, PDF, MOBI…) e grava em /mnt/us/documents/</span>
+      </a>
+      <a class="home-link" href="{{ url_for('main.screensaver_page') }}">
+        <span class="home-link-kicker">Sleep screen</span>
+        <span class="home-link-title">Screensaver</span>
+        <span class="home-link-copy">Imagem em tons de cinza para a pasta do screensaver do KOReader</span>
+      </a>
+    </nav>
+  </main>
+</body>
+</html>

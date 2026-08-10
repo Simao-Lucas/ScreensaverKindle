@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ScreensaverKindle</title>
+  <title>Screensaver · ScreensaverKindle</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap" rel="stylesheet" />
@@ -12,9 +12,10 @@
 <body>
   <div class="grain" aria-hidden="true"></div>
   <main class="shell">
+    <p class="back"><a href="{{ url_for('main.home') }}">← Início</a></p>
     <header class="brand">
       <p class="eyebrow">Paperwhite · {{ width }}×{{ height }}</p>
-      <h1>ScreensaverKindle</h1>
+      <h1>Screensaver</h1>
       <p class="lede">Converte a imagem para e-ink e atualiza a pasta de screensaver do KOReader. Ela aparece quando o Kindle dorme.</p>
     </header>
 
@@ -27,7 +28,7 @@
       </div>
 
       <figure class="preview-frame" data-empty="{{ 'false' if has_current else 'true' }}">
-        <img id="preview" src="{{ '/preview' if has_current else '' }}" alt="Preview e-ink" {% if not has_current %}hidden{% endif %} />
+        <img id="preview" src="{{ '/screensaver/preview' if has_current else '' }}" alt="Preview e-ink" {% if not has_current %}hidden{% endif %} />
         <figcaption id="previewCaption">{{ 'Preview convertido' if has_current else 'Aguardando imagem' }}</figcaption>
       </figure>
     </section>
@@ -47,6 +48,6 @@
     <p class="message" id="message" role="status"></p>
   </main>
 
-  <script src="{{ url_for('static', filename='app.js') }}"></script>
+  <script src="{{ url_for('static', filename='screensaver.js') }}"></script>
 </body>
 </html>

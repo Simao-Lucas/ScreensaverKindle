@@ -22,6 +22,7 @@ class KindleClient:
     remote_path: str = "/mnt/us/screensaver/current.png"
     refresh_cmd: str = ""
     clear_screensaver_dir: bool = True
+    documents_dir: str = "/mnt/us/documents"
 
     def _connect(self) -> paramiko.SSHClient:
         if not self.host:
@@ -29,7 +30,6 @@ class KindleClient:
 
         key_file = self.key_path.strip()
         if key_file and not Path(key_file).is_file():
-            # Sem arquivo = tenta senha (inclusive vazia, comum no Kindle).
             key_file = ""
 
         client = paramiko.SSHClient()
@@ -47,7 +47,6 @@ class KindleClient:
             if self.password:
                 connect_kwargs["password"] = self.password
         else:
-            # Senha vazia é válida em muitos Kindles jailbroken (dropbear).
             connect_kwargs["password"] = self.password
 
         try:
@@ -68,13 +67,13 @@ class KindleClient:
             ) from exc
         return client
 
-    @property
-    def remote_dir(self) -> str:
-        return str(Path(self.remote_path).parent).replace("\\", "/")
+    @staticmethod
+    def _parent_dir(remote_path: str) -> str:
+        return str(Path(remote_path).parent).replace("\\", "/")
 
-    def ensure_remote_dir(self, client: paramiko.SSHClient) -> None:
+    def ensure_remote_dir(self, client: paramiko.SSHClient, remote_dir: str) -> None:
         stdin, stdout, stderr = client.exec_command(
-            f'mkdir -p "{self.remote_dir}"',
+            f'mkdir -p "{remote_dir}"',
             timeout=self.timeout,
         )
         exit_status = stdout.channel.recv_exit_status()
@@ -82,12 +81,11 @@ class KindleClient:
             err = stderr.read().decode("utf-8", errors="replace").strip()
             raise KindleError(f"Não foi possível criar pasta remota: {err or exit_status}")
 
-    def clear_old_images(self, client: paramiko.SSHClient) -> None:
-        """Keep only the new wallpaper so KOReader random_image always picks it."""
+    def clear_old_images(self, client: paramiko.SSHClient, remote_dir: str) -> None:
         if not self.clear_screensaver_dir:
             return
         cmd = (
-            f'find "{self.remote_dir}" -maxdepth 1 -type f '
+            f'find "{remote_dir}" -maxdepth 1 -type f '
             r'\( -iname "*.png" -o -iname "*.jpg" -o -iname "*.jpeg" \) -delete'
         )
         stdin, stdout, stderr = client.exec_command(cmd, timeout=self.timeout)
@@ -96,17 +94,25 @@ class KindleClient:
             err = stderr.read().decode("utf-8", errors="replace").strip()
             raise KindleError(f"Não foi possível limpar pasta do screensaver: {err or exit_status}")
 
-    def upload(self, local_path: Path) -> None:
+    def upload_to(
+        self,
+        local_path: Path,
+        remote_path: str,
+        *,
+        clear_images: bool = False,
+    ) -> None:
         if not local_path.is_file():
             raise KindleError(f"Arquivo local não encontrado: {local_path}")
 
+        remote_dir = self._parent_dir(remote_path)
         client = self._connect()
         try:
-            self.ensure_remote_dir(client)
-            self.clear_old_images(client)
+            self.ensure_remote_dir(client, remote_dir)
+            if clear_images:
+                self.clear_old_images(client, remote_dir)
             sftp = client.open_sftp()
             try:
-                sftp.put(str(local_path), self.remote_path)
+                sftp.put(str(local_path), remote_path)
             finally:
                 sftp.close()
         except KindleError:
@@ -116,8 +122,20 @@ class KindleClient:
         finally:
             client.close()
 
+    def upload(self, local_path: Path) -> None:
+        self.upload_to(
+            local_path,
+            self.remote_path,
+            clear_images=self.clear_screensaver_dir,
+        )
+
+    def upload_document(self, local_path: Path, remote_name: str) -> str:
+        remote_name = remote_name.lstrip("/")
+        remote_path = f"{self.documents_dir.rstrip('/')}/{remote_name}"
+        self.upload_to(local_path, remote_path, clear_images=False)
+        return remote_path
+
     def refresh(self) -> str | None:
-        """Optional post-upload SSH command (empty = screensaver-only mode)."""
         if not self.refresh_cmd.strip():
             return None
 
@@ -152,3 +170,11 @@ class KindleClient:
         if output is not None:
             result["refresh_output"] = output
         return result
+
+    def push_document(self, local_path: Path, remote_name: str) -> dict[str, str]:
+        remote_path = self.upload_document(local_path, remote_name)
+        return {
+            "transferred": "ok",
+            "documents_path": remote_path,
+            "mode": "kindle_documents",
+        }

@@ -3,6 +3,8 @@ secrets/*
 !secrets/.gitkeep
 data/uploads/*
 !data/uploads/.gitkeep
+data/books/**
+!data/books/.gitkeep
 __pycache__/
 *.pyc
 .venv/

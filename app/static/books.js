@@ -3,11 +3,13 @@
   const fileInput = document.getElementById("fileInput");
   const pickBtn = document.getElementById("pickBtn");
   const pushBtn = document.getElementById("pushBtn");
-  const preview = document.getElementById("preview");
-  const previewFrame = document.querySelector(".preview-frame");
-  const previewCaption = document.getElementById("previewCaption");
+  const formatSelect = document.getElementById("formatSelect");
+  const bookReady = document.getElementById("bookReady");
+  const bookName = document.getElementById("bookName");
   const messageEl = document.getElementById("message");
   const statusList = document.getElementById("statusList");
+
+  let pendingFile = null;
 
   function setMessage(text, type = "") {
     messageEl.textContent = text || "";
@@ -23,47 +25,49 @@
     }
   }
 
-  function showPreview(url) {
-    preview.hidden = false;
-    preview.src = `${url}?t=${Date.now()}`;
-    previewFrame.dataset.empty = "false";
-    previewCaption.textContent = "Preview convertido";
-    pushBtn.disabled = false;
+  function showReady(name) {
+    bookName.textContent = name || "";
+    bookReady.hidden = !name;
+    pushBtn.disabled = !name;
   }
 
-  async function uploadFile(file) {
+  async function convertFile(file) {
     if (!file) return;
-    setMessage("Convertendo imagem…");
+    pendingFile = file;
+    setMessage("Convertendo livro…");
     setStatus({ converted: false, transferred: false, ready: false });
     pushBtn.disabled = true;
 
     const body = new FormData();
-    body.append("image", file);
+    body.append("book", file);
+    body.append("format", formatSelect.value);
 
     try {
-      const res = await fetch("/upload", { method: "POST", body });
+      const res = await fetch("/books/upload", { method: "POST", body });
       const data = await res.json();
       if (!res.ok || !data.ok) {
         setStatus({ converted: "fail" });
-        setMessage(data.error || "Falha no upload.", "error");
+        setMessage(data.error || "Falha na conversão.", "error");
+        showReady("");
         return;
       }
       setStatus(data.status || { converted: true });
-      showPreview(data.preview_url || "/preview");
-      setMessage(data.message || "Convertida.", "ok");
+      showReady(data.book_name || "");
+      setMessage(data.message || "Convertido.", "ok");
     } catch (err) {
       setStatus({ converted: "fail" });
       setMessage(`Erro de rede: ${err.message}`, "error");
+      showReady("");
     }
   }
 
   async function pushToKindle() {
-    setMessage("Enviando para o Kindle…");
+    setMessage("Enviando livro para o Kindle…");
     setStatus({ converted: true, transferred: false, ready: false });
     pushBtn.disabled = true;
 
     try {
-      const res = await fetch("/push", { method: "POST" });
+      const res = await fetch("/books/push", { method: "POST" });
       const data = await res.json();
       if (!res.ok || !data.ok) {
         setStatus({
@@ -88,8 +92,12 @@
   pickBtn.addEventListener("click", () => fileInput.click());
   fileInput.addEventListener("change", () => {
     const file = fileInput.files && fileInput.files[0];
-    uploadFile(file);
+    convertFile(file);
     fileInput.value = "";
+  });
+
+  formatSelect.addEventListener("change", () => {
+    if (pendingFile) convertFile(pendingFile);
   });
 
   ["dragenter", "dragover"].forEach((evt) => {
@@ -108,7 +116,7 @@
 
   dropzone.addEventListener("drop", (e) => {
     const file = e.dataTransfer.files && e.dataTransfer.files[0];
-    uploadFile(file);
+    convertFile(file);
   });
 
   pushBtn.addEventListener("click", pushToKindle);

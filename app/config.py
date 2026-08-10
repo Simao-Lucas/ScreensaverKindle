@@ -7,7 +7,6 @@ def _env(name: str, default: str = "") -> str:
     value = os.getenv(name, default)
     if value is None:
         return default
-    # Remove BOM, quotes, inline comments and trailing CR from Windows .env
     value = value.replace("\ufeff", "").strip().strip('"').strip("'")
     if "#" in value:
         value = value.split("#", 1)[0].strip()
@@ -56,6 +55,9 @@ class Config:
     CURRENT_IMAGE = UPLOAD_DIR / "current.png"
     PREVIEW_IMAGE = UPLOAD_DIR / "preview.png"
 
+    BOOKS_DIR = Path(_env("BOOKS_DIR", "") or (BASE_DIR / "data" / "books"))
+    CURRENT_BOOK_META = BOOKS_DIR / "current.json"
+
     KINDLE_WIDTH = _env_int("KINDLE_WIDTH", 1072)
     KINDLE_HEIGHT = _env_int("KINDLE_HEIGHT", 1448)
     KINDLE_CONTRAST = _env_float("KINDLE_CONTRAST", 1.15)
@@ -71,6 +73,28 @@ class Config:
     ) or "/mnt/us/screensaver/current.png"
     KINDLE_REFRESH_CMD = _env("KINDLE_REFRESH_CMD", "")
     KINDLE_CLEAR_SCREENSAVER_DIR = _env_bool("KINDLE_CLEAR_SCREENSAVER_DIR", True)
+    KINDLE_DOCUMENTS_DIR = _env(
+        "KINDLE_DOCUMENTS_DIR", "/mnt/us/documents"
+    ) or "/mnt/us/documents"
 
-    MAX_CONTENT_LENGTH = 20 * 1024 * 1024
+    # Limite global alto o bastante para livros (imagens são bem menores)
+    MAX_CONTENT_LENGTH = _env_int("BOOK_MAX_CONTENT_LENGTH", 200 * 1024 * 1024)
     ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "bmp", "gif"}
+    BOOK_INPUT_EXTENSIONS = {
+        "epub",
+        "pdf",
+        "mobi",
+        "azw",
+        "azw3",
+        "docx",
+        "html",
+        "htm",
+        "rtf",
+        "txt",
+        "fb2",
+        "odt",
+        "cbz",
+    }
+    BOOK_OUTPUT_FORMATS = ("epub", "pdf", "mobi", "fb2", "txt")
+    EBOOK_CONVERT_BIN = _env("EBOOK_CONVERT_BIN", "ebook-convert") or "ebook-convert"
+    EBOOK_CONVERT_TIMEOUT = _env_int("EBOOK_CONVERT_TIMEOUT", 600)

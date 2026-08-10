@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Enviar Livro · ScreensaverKindle</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}" />
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+  <main class="shell">
+    <p class="back"><a href="{{ url_for('main.home') }}">← Início</a></p>
+    <header class="brand">
+      <p class="eyebrow">KOReader · documents</p>
+      <h1>Enviar Livro</h1>
+      <p class="lede">Envie um arquivo, escolha o formato de saída e o servidor converte com Calibre antes de gravar no Kindle.</p>
+    </header>
+
+    <section class="stage books-stage" aria-label="Upload de livro">
+      <div class="dropzone" id="dropzone">
+        <input type="file" id="fileInput" accept=".epub,.pdf,.mobi,.azw,.azw3,.docx,.html,.htm,.rtf,.txt,.fb2,.odt,.cbz" hidden />
+        <p class="drop-title">Solte o livro aqui</p>
+        <p class="drop-hint">EPUB, PDF, MOBI, AZW3, DOCX…</p>
+        <button type="button" class="btn ghost" id="pickBtn">Escolher arquivo</button>
+      </div>
+
+      <div class="book-panel">
+        <label class="field-label" for="formatSelect">Formato desejado</label>
+        <select id="formatSelect" class="format-select">
+          {% for fmt in output_formats %}
+          <option value="{{ fmt }}" {% if fmt == 'epub' %}selected{% endif %}>{{ fmt | upper }}</option>
+          {% endfor %}
+        </select>
+        <p class="field-hint">AZW3/KFX → converta para EPUB/PDF/MOBI para o KOReader.</p>
+        <p class="book-ready" id="bookReady" {% if not has_book %}hidden{% endif %}>
+          Pronto: <code id="bookName">{{ book_name }}</code>
+        </p>
+      </div>
+    </section>
+
+    <section class="controls">
+      <button type="button" class="btn primary" id="pushBtn" {% if not has_book %}disabled{% endif %}>
+        Enviar para Kindle
+      </button>
+      <p class="target">Destino: <code>{{ host }}</code> → <code>{{ documents_dir }}</code></p>
+    </section>
+
+    <ul class="status" id="statusList" aria-live="polite">
+      <li data-key="converted" class="{% if has_book %}done{% endif %}">Convertido</li>
+      <li data-key="transferred">Transferido</li>
+      <li data-key="ready">Em documents</li>
+    </ul>
+    <p class="message" id="message" role="status"></p>
+  </main>
+
+  <script src="{{ url_for('static', filename='books.js') }}"></script>
+</body>
+</html>
