@@ -15,14 +15,19 @@
     <header class="brand">
       <p class="eyebrow">Kindle · jailbreak · KOReader</p>
       <h1>ScreensaverKindle</h1>
-      <p class="lede">Envie livros para a biblioteca ou atualize o screensaver e-ink — pelo mesmo painel.</p>
+      <p class="lede">Biblioteca remota, envio de livros e screensaver e-ink — no mesmo painel.</p>
     </header>
 
     <nav class="home-nav" aria-label="Destinos">
+      <a class="home-link" href="{{ url_for('main.library_page') }}">
+        <span class="home-link-kicker">KOReader</span>
+        <span class="home-link-title">Biblioteca</span>
+        <span class="home-link-copy">Ver e editar livros, capas, favoritos e coleções em /mnt/us/documents/</span>
+      </a>
       <a class="home-link" href="{{ url_for('main.books_page') }}">
-        <span class="home-link-kicker">Biblioteca</span>
+        <span class="home-link-kicker">Upload</span>
         <span class="home-link-title">Enviar Livro</span>
-        <span class="home-link-copy">Converte (EPUB, PDF, MOBI…) e grava em /mnt/us/documents/</span>
+        <span class="home-link-copy">Converte (EPUB, PDF, MOBI…) e grava no Kindle</span>
       </a>
       <a class="home-link" href="{{ url_for('main.screensaver_page') }}">
         <span class="home-link-kicker">Sleep screen</span>

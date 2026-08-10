@@ -326,7 +326,7 @@ h1 {
 
 .home-nav {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 1.25rem;
   margin-top: 2.5rem;
   animation: rise 0.8s ease 0.1s both;
@@ -515,5 +515,152 @@ h1 {
   .meta-grid,
   .cover-row {
     grid-template-columns: 1fr;
+  }
+}
+
+.library-layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+  animation: rise 0.75s ease both;
+}
+
+.library-side {
+  border-right: 1px solid var(--line);
+  padding-right: 1rem;
+}
+
+.collection-list,
+.book-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.collection-item {
+  margin-bottom: 0.65rem;
+}
+
+.collection-pick,
+.book-open {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  padding: 0.35rem 0;
+}
+
+.collection-pick span,
+.book-item-meta {
+  color: var(--line);
+  font-size: 0.85rem;
+}
+
+.collection-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.15rem;
+}
+
+.linkish {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--line);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.danger-text {
+  color: var(--err);
+}
+
+.collection-create {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 1rem 0 0.5rem;
+}
+
+.collection-create input {
+  font: inherit;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--paper) 85%, white);
+}
+
+.library-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.book-item {
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
+  padding: 0.55rem 0;
+}
+
+.book-item-title {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+}
+
+.book-empty {
+  color: var(--line);
+  padding: 1rem 0;
+}
+
+.detail-panel {
+  margin-top: 2rem;
+}
+
+.membership {
+  margin-top: 1.25rem;
+}
+
+.membership-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  margin-top: 0.5rem;
+}
+
+.check-row {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  font-size: 0.95rem;
+}
+
+.btn.danger {
+  border-color: var(--err);
+  color: var(--err);
+}
+
+.btn.danger:hover:not(:disabled) {
+  background: var(--err);
+  color: #fff;
+}
+
+@media (max-width: 900px) {
+  .library-layout,
+  .home-nav {
+    grid-template-columns: 1fr;
+  }
+
+  .library-side {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    padding-right: 0;
+    padding-bottom: 1rem;
   }
 }

@@ -192,3 +192,157 @@ class KindleClient:
             self.upload_to(cover_local, cover_remote, clear_images=False)
             result["cover_path"] = cover_remote
         return result
+
+    def list_documents(self, extensions: set[str] | None = None) -> list[dict]:
+        """List book files in documents_dir (not .sdr folders)."""
+        extensions = {e.lower().lstrip(".") for e in (extensions or set())}
+        docs = self.documents_dir.rstrip("/")
+        client = self._connect()
+        try:
+            sftp = client.open_sftp()
+            try:
+                entries = []
+                for attr in sftp.listdir_attr(docs):
+                    name = attr.filename
+                    if name.startswith("."):
+                        continue
+                    if name.endswith(".sdr"):
+                        continue
+                    # skip directories
+                    if (attr.st_mode & 0o170000) == 0o040000:
+                        continue
+                    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+                    if extensions and ext not in extensions:
+                        continue
+                    stem = Path(name).stem
+                    cover_remote = f"{docs}/{stem}.sdr/cover.jpg"
+                    has_cover = False
+                    try:
+                        sftp.stat(cover_remote)
+                        has_cover = True
+                    except OSError:
+                        # try cover.png
+                        try:
+                            sftp.stat(f"{docs}/{stem}.sdr/cover.png")
+                            has_cover = True
+                            cover_remote = f"{docs}/{stem}.sdr/cover.png"
+                        except OSError:
+                            cover_remote = ""
+                    entries.append(
+                        {
+                            "name": name,
+                            "path": f"{docs}/{name}",
+                            "size": int(attr.st_size or 0),
+                            "mtime": int(attr.st_mtime or 0),
+                            "has_cover": has_cover,
+                            "cover_remote": cover_remote,
+                            "sdr_dir": f"{docs}/{stem}.sdr",
+                        }
+                    )
+                entries.sort(key=lambda e: e["name"].lower())
+                return entries
+            finally:
+                sftp.close()
+        except KindleError:
+            raise
+        except (paramiko.SSHException, OSError) as exc:
+            raise KindleError(f"Falha ao listar documents: {exc}") from exc
+        finally:
+            client.close()
+
+    def download_file(self, remote_path: str, local_path: Path) -> Path:
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        client = self._connect()
+        try:
+            sftp = client.open_sftp()
+            try:
+                sftp.get(remote_path, str(local_path))
+            finally:
+                sftp.close()
+        except KindleError:
+            raise
+        except (paramiko.SSHException, OSError) as exc:
+            raise KindleError(f"Falha ao baixar {remote_path}: {exc}") from exc
+        finally:
+            client.close()
+        return local_path
+
+    def remote_exists(self, remote_path: str) -> bool:
+        client = self._connect()
+        try:
+            sftp = client.open_sftp()
+            try:
+                sftp.stat(remote_path)
+                return True
+            except OSError:
+                return False
+            finally:
+                sftp.close()
+        finally:
+            client.close()
+
+    def read_text(self, remote_path: str) -> str:
+        client = self._connect()
+        try:
+            sftp = client.open_sftp()
+            try:
+                with sftp.open(remote_path, "r") as fh:
+                    data = fh.read()
+                if isinstance(data, bytes):
+                    return data.decode("utf-8", errors="replace")
+                return str(data)
+            except OSError as exc:
+                raise KindleError(f"Não foi possível ler {remote_path}: {exc}") from exc
+            finally:
+                sftp.close()
+        finally:
+            client.close()
+
+    def write_text(self, remote_path: str, content: str, *, backup: bool = True) -> None:
+        remote_dir = self._parent_dir(remote_path)
+        client = self._connect()
+        try:
+            self.ensure_remote_dir(client, remote_dir)
+            sftp = client.open_sftp()
+            try:
+                if backup:
+                    try:
+                        sftp.stat(remote_path)
+                        try:
+                            sftp.remove(remote_path + ".old")
+                        except OSError:
+                            pass
+                        sftp.rename(remote_path, remote_path + ".old")
+                    except OSError:
+                        pass
+                with sftp.open(remote_path, "w") as fh:
+                    fh.write(content.encode("utf-8"))
+            finally:
+                sftp.close()
+        except KindleError:
+            raise
+        except (paramiko.SSHException, OSError) as exc:
+            raise KindleError(f"Falha ao gravar {remote_path}: {exc}") from exc
+        finally:
+            client.close()
+
+    def remove_remote(self, remote_path: str) -> None:
+        """Remove a file or directory tree on the Kindle."""
+        client = self._connect()
+        try:
+            # Prefer rm -rf via shell for .sdr directories
+            cmd = f'rm -rf -- "{remote_path}"'
+            stdin, stdout, stderr = client.exec_command(cmd, timeout=self.timeout)
+            exit_status = stdout.channel.recv_exit_status()
+            if exit_status != 0:
+                err = stderr.read().decode("utf-8", errors="replace").strip()
+                raise KindleError(f"Falha ao apagar {remote_path}: {err or exit_status}")
+        finally:
+            client.close()
+
+    def delete_document(self, remote_name: str) -> None:
+        docs = self.documents_dir.rstrip("/")
+        name = remote_name.lstrip("/")
+        stem = Path(name).stem
+        self.remove_remote(f"{docs}/{name}")
+        self.remove_remote(f"{docs}/{stem}.sdr")

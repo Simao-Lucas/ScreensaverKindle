@@ -1,12 +1,15 @@
 # ScreensaverKindle
 
-Painel web em Docker para o Kindle jailbroken: **enviar livros** (Calibre) e **atualizar o screensaver** do KOReader.
+Painel web em Docker para o Kindle jailbroken: **biblioteca remota**, **enviar livros** (Calibre) e **screensaver** do KOReader.
 
 ## Fluxos
 
-1. **Início** (`/`) — escolha Enviar Livro ou Screensaver
-2. **Enviar Livro** (`/books`) — upload → formato → editar metadados/capa → SFTP em `/mnt/us/documents/` (+ `Nome.sdr/cover.jpg` se houver capa)
-3. **Screensaver** (`/screensaver`) — imagem e-ink → pasta do screensaver do KOReader
+1. **Início** (`/`) — Biblioteca, Enviar Livro ou Screensaver
+2. **Biblioteca** (`/library`) — lista `/mnt/us/documents/`, edita metadados/capa, exclui livros, gerencia coleções e favoritos (`collection.lua`)
+3. **Enviar Livro** (`/books`) — upload → formato → metadados/capa → SFTP em `/mnt/us/documents/` (+ `Nome.sdr/cover.jpg` se houver capa)
+4. **Screensaver** (`/screensaver`) — imagem e-ink → pasta do screensaver do KOReader
+
+Após alterar coleções/favoritos na Biblioteca, **reinicie o KOReader** (ou reabra Collections) para recarregar `collection.lua`.
 
 ## Formatos de livro
 
@@ -61,6 +64,8 @@ docker compose up -d --build
 | `KINDLE_SSH_KEY` | `/keys/id_rsa` |
 | `KINDLE_REMOTE_PATH` | `/mnt/us/screensaver/current.png` |
 | `KINDLE_DOCUMENTS_DIR` | `/mnt/us/documents` |
+| `KINDLE_KOREADER_DIR` | `/mnt/us/koreader` |
+| `KINDLE_COLLECTION_FILE` | `/mnt/us/koreader/settings/collection.lua` |
 | `EBOOK_CONVERT_BIN` | `ebook-convert` |
 | `BOOK_MAX_CONTENT_LENGTH` | `209715200` (200 MB) |
 | `PORT` | `8080` |

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Biblioteca · ScreensaverKindle</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}" />
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+  <main class="shell library-shell">
+    <p class="back"><a href="{{ url_for('main.home') }}">← Início</a></p>
+    <header class="brand">
+      <p class="eyebrow">KOReader · remoto</p>
+      <h1>Biblioteca</h1>
+      <p class="lede">Livros em <code>{{ documents_dir }}</code> no Kindle (<code>{{ host }}</code>). Edite metadados, capas, coleções e favoritos. Após mudar coleções, reinicie o KOReader.</p>
+    </header>
+
+    <section class="library-layout">
+      <aside class="library-side">
+        <h2 class="meta-heading">Coleções</h2>
+        <ul class="collection-list" id="collectionList"></ul>
+        <div class="collection-create">
+          <input type="text" id="newCollectionName" placeholder="Nova coleção" />
+          <button type="button" class="btn" id="createCollectionBtn">Criar</button>
+        </div>
+        <p class="field-hint">Favoritos = coleção nativa <code>favorites</code>.</p>
+      </aside>
+
+      <section class="library-main">
+        <div class="library-toolbar">
+          <button type="button" class="btn" id="refreshBtn">Atualizar lista</button>
+          <select id="filterCollection" class="format-select">
+            <option value="">Todas</option>
+            <option value="favorites">Favoritos</option>
+          </select>
+        </div>
+        <ul class="book-list" id="bookList" aria-live="polite"></ul>
+        <p class="message" id="listMessage" role="status"></p>
+      </section>
+    </section>
+
+    <section class="meta-panel detail-panel" id="detailPanel" hidden>
+      <h2 class="meta-heading" id="detailTitle">Livro</h2>
+      <p class="field-hint" id="detailFile"></p>
+
+      <div class="meta-grid">
+        <label class="field">
+          <span class="field-label">Título</span>
+          <input type="text" id="dTitle" />
+        </label>
+        <label class="field">
+          <span class="field-label">Autores</span>
+          <input type="text" id="dAuthors" />
+        </label>
+        <label class="field">
+          <span class="field-label">Editora</span>
+          <input type="text" id="dPublisher" />
+        </label>
+        <label class="field">
+          <span class="field-label">Série</span>
+          <input type="text" id="dSeries" />
+        </label>
+        <label class="field">
+          <span class="field-label">Tags</span>
+          <input type="text" id="dTags" />
+        </label>
+        <label class="field">
+          <span class="field-label">Idioma</span>
+          <input type="text" id="dLanguage" />
+        </label>
+        <label class="field field-span">
+          <span class="field-label">Comentários</span>
+          <textarea id="dComments" rows="3"></textarea>
+        </label>
+      </div>
+
+      <div class="cover-row">
+        <div>
+          <p class="field-label">Capa</p>
+          <input type="file" id="dCoverInput" accept="image/png,image/jpeg,image/webp,image/bmp,image/gif" hidden />
+          <button type="button" class="btn ghost" id="dCoverBtn">Trocar capa</button>
+        </div>
+        <figure class="cover-frame" id="dCoverFrame" data-empty="true">
+          <img id="dCoverPreview" alt="Capa" hidden />
+          <figcaption>cover.jpg</figcaption>
+        </figure>
+      </div>
+
+      <div class="membership" id="membership"></div>
+
+      <div class="controls meta-controls">
+        <button type="button" class="btn primary" id="saveMetaBtn">Salvar metadados</button>
+        <button type="button" class="btn" id="toggleFavBtn">Favorito</button>
+        <button type="button" class="btn danger" id="deleteBookBtn">Excluir livro</button>
+        <button type="button" class="btn ghost" id="closeDetailBtn">Fechar</button>
+      </div>
+      <p class="message" id="detailMessage" role="status"></p>
+    </section>
+  </main>
+
+  <script src="{{ url_for('static', filename='library.js') }}"></script>
+</body>
+</html>

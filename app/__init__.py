@@ -10,6 +10,9 @@ def create_app(config_class: type[Config] = Config) -> Flask:
     config_class.BOOKS_DIR.mkdir(parents=True, exist_ok=True)
     (config_class.BOOKS_DIR / "incoming").mkdir(parents=True, exist_ok=True)
     (config_class.BOOKS_DIR / "ready").mkdir(parents=True, exist_ok=True)
+    config_class.LIBRARY_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    (config_class.LIBRARY_CACHE_DIR / "covers").mkdir(parents=True, exist_ok=True)
+    (config_class.LIBRARY_CACHE_DIR / "tmp").mkdir(parents=True, exist_ok=True)
 
     from app.main import bp
 

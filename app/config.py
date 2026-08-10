@@ -76,8 +76,17 @@ class Config:
     KINDLE_DOCUMENTS_DIR = _env(
         "KINDLE_DOCUMENTS_DIR", "/mnt/us/documents"
     ) or "/mnt/us/documents"
+    KINDLE_KOREADER_DIR = _env(
+        "KINDLE_KOREADER_DIR", "/mnt/us/koreader"
+    ) or "/mnt/us/koreader"
+    KINDLE_COLLECTION_FILE = _env(
+        "KINDLE_COLLECTION_FILE",
+        "",
+    ) or ""
 
-    # Limite global alto o bastante para livros (imagens são bem menores)
+    LIBRARY_CACHE_DIR = Path(
+        _env("LIBRARY_CACHE_DIR", "") or (BASE_DIR / "data" / "library")
+    )
     MAX_CONTENT_LENGTH = _env_int("BOOK_MAX_CONTENT_LENGTH", 200 * 1024 * 1024)
     ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "bmp", "gif"}
     BOOK_INPUT_EXTENSIONS = {

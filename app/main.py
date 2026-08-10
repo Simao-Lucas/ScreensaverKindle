@@ -29,6 +29,8 @@ from app.book_meta import (
 )
 from app.image_pipeline import process_image, save_kindle_png, save_preview_png
 from app.kindle_client import KindleClient, KindleError
+from app.koreader_collections import CollectionError
+from app.library_service import LibraryService
 
 bp = Blueprint("main", __name__)
 
@@ -60,6 +62,25 @@ def kindle_client() -> KindleClient:
         refresh_cmd=cfg.get("KINDLE_REFRESH_CMD", "") or "",
         clear_screensaver_dir=cfg.get("KINDLE_CLEAR_SCREENSAVER_DIR", True),
         documents_dir=cfg.get("KINDLE_DOCUMENTS_DIR", "/mnt/us/documents"),
+    )
+
+
+def collection_file_path() -> str:
+    configured = (current_app.config.get("KINDLE_COLLECTION_FILE") or "").strip()
+    if configured:
+        return configured
+    root = current_app.config.get("KINDLE_KOREADER_DIR", "/mnt/us/koreader").rstrip("/")
+    return f"{root}/settings/collection.lua"
+
+
+def library_service() -> LibraryService:
+    cfg = current_app.config
+    return LibraryService(
+        kindle_client(),
+        cache_dir=Path(cfg["LIBRARY_CACHE_DIR"]),
+        collection_file=collection_file_path(),
+        book_extensions=set(cfg["BOOK_INPUT_EXTENSIONS"]),
+        ebook_meta_bin=cfg.get("EBOOK_META_BIN", "ebook-meta"),
     )
 
 
@@ -569,6 +590,156 @@ def books_push():
             "detail": result,
         }
     )
+
+
+# --- Library -----------------------------------------------------------------
+
+
+@bp.get("/library")
+def library_page():
+    return render_template(
+        "library.html",
+        host=current_app.config["KINDLE_HOST"] or "(não configurado)",
+        documents_dir=current_app.config["KINDLE_DOCUMENTS_DIR"],
+    )
+
+
+@bp.get("/api/library/books")
+def api_library_books():
+    try:
+        books = library_service().list_books()
+    except KindleError as exc:
+        return jsonify({"ok": False, "error": str(exc), "books": []}), 502
+    return jsonify({"ok": True, "books": books})
+
+
+@bp.get("/api/library/books/<path:name>")
+def api_library_book(name: str):
+    try:
+        book = library_service().get_book(name)
+    except KindleError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    return jsonify({"ok": True, "book": book})
+
+
+@bp.post("/api/library/books/<path:name>/metadata")
+def api_library_metadata(name: str):
+    payload = request.get_json(silent=True) or {}
+    fields = empty_metadata()
+    for key in fields:
+        fields[key] = str(payload.get(key, "") or "").strip()
+    try:
+        book = library_service().save_metadata(name, fields)
+    except KindleError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 502
+    return jsonify({"ok": True, "book": book, "message": "Metadados salvos no Kindle."})
+
+
+@bp.post("/api/library/books/<path:name>/cover")
+def api_library_cover(name: str):
+    if "cover" not in request.files:
+        return jsonify({"ok": False, "error": "Nenhuma capa enviada."}), 400
+    file = request.files["cover"]
+    if not file or not file.filename or not allowed_image(file.filename):
+        return jsonify({"ok": False, "error": "Use PNG/JPG/WEBP/BMP/GIF."}), 400
+    svc = library_service()
+    raw = Path(current_app.config["LIBRARY_CACHE_DIR"]) / "tmp" / secure_filename(file.filename)
+    raw.parent.mkdir(parents=True, exist_ok=True)
+    file.save(raw)
+    try:
+        book = svc.save_cover(name, raw)
+    except (KindleError, Exception) as exc:  # noqa: BLE001
+        return jsonify({"ok": False, "error": str(exc)}), 502
+    finally:
+        if raw.exists():
+            raw.unlink(missing_ok=True)
+    return jsonify({"ok": True, "book": book, "message": "Capa atualizada."})
+
+
+@bp.delete("/api/library/books/<path:name>")
+def api_library_delete(name: str):
+    try:
+        library_service().delete_book(name)
+    except KindleError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 502
+    return jsonify({"ok": True, "message": f"Apagado: {name}"})
+
+
+@bp.get("/library/cover/<path:name>")
+def library_cover(name: str):
+    svc = library_service()
+    try:
+        book = svc.get_book(name)
+    except KindleError as exc:
+        return jsonify({"error": str(exc)}), 404
+    if not book.get("has_cover") or not book.get("cover_remote"):
+        return jsonify({"error": "Sem capa."}), 404
+    local = svc.cache_cover(name, book["cover_remote"])
+    if not local or not local.is_file():
+        return jsonify({"error": "Falha ao baixar capa."}), 502
+    return send_from_directory(local.parent, local.name, mimetype="image/jpeg")
+
+
+@bp.get("/api/library/collections")
+def api_collections_list():
+    try:
+        rows = library_service().list_collections()
+    except (KindleError, CollectionError) as exc:
+        return jsonify({"ok": False, "error": str(exc), "collections": []}), 502
+    return jsonify({"ok": True, "collections": rows})
+
+
+@bp.post("/api/library/collections")
+def api_collections_create():
+    payload = request.get_json(silent=True) or {}
+    name = str(payload.get("name", "")).strip()
+    if not name:
+        return jsonify({"ok": False, "error": "Nome da coleção obrigatório."}), 400
+    try:
+        rows = library_service().create_collection(name)
+    except (KindleError, CollectionError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    return jsonify({"ok": True, "collections": rows, "message": f"Coleção criada: {name}"})
+
+
+@bp.patch("/api/library/collections/<path:coll_name>")
+def api_collections_rename(coll_name: str):
+    payload = request.get_json(silent=True) or {}
+    new_name = str(payload.get("name", "")).strip()
+    if not new_name:
+        return jsonify({"ok": False, "error": "Novo nome obrigatório."}), 400
+    try:
+        rows = library_service().rename_collection(coll_name, new_name)
+    except (KindleError, CollectionError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    return jsonify({"ok": True, "collections": rows})
+
+
+@bp.delete("/api/library/collections/<path:coll_name>")
+def api_collections_delete(coll_name: str):
+    try:
+        rows = library_service().delete_collection(coll_name)
+    except (KindleError, CollectionError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    return jsonify({"ok": True, "collections": rows})
+
+
+@bp.post("/api/library/collections/<path:coll_name>/books")
+def api_collections_books(coll_name: str):
+    payload = request.get_json(silent=True) or {}
+    book_path = str(payload.get("path", "")).strip()
+    action = str(payload.get("action", "add")).strip().lower()
+    if not book_path:
+        return jsonify({"ok": False, "error": "path do livro obrigatório."}), 400
+    try:
+        rows = library_service().set_book_in_collection(
+            coll_name,
+            book_path,
+            add=(action != "remove"),
+        )
+    except (KindleError, CollectionError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    return jsonify({"ok": True, "collections": rows})
 
 
 from app import create_app  # noqa: E402
