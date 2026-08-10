@@ -97,4 +97,5 @@ class Config:
     }
     BOOK_OUTPUT_FORMATS = ("epub", "pdf", "mobi", "fb2", "txt")
     EBOOK_CONVERT_BIN = _env("EBOOK_CONVERT_BIN", "ebook-convert") or "ebook-convert"
+    EBOOK_META_BIN = _env("EBOOK_META_BIN", "ebook-meta") or "ebook-meta"
     EBOOK_CONVERT_TIMEOUT = _env_int("EBOOK_CONVERT_TIMEOUT", 600)

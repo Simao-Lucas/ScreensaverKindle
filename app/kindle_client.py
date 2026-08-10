@@ -171,10 +171,24 @@ class KindleClient:
             result["refresh_output"] = output
         return result
 
-    def push_document(self, local_path: Path, remote_name: str) -> dict[str, str]:
+    def push_document(
+        self,
+        local_path: Path,
+        remote_name: str,
+        *,
+        cover_local: Path | None = None,
+    ) -> dict[str, str]:
         remote_path = self.upload_document(local_path, remote_name)
-        return {
+        result = {
             "transferred": "ok",
             "documents_path": remote_path,
             "mode": "kindle_documents",
         }
+        if cover_local is not None and cover_local.is_file():
+            stem = Path(remote_name).stem
+            cover_remote = (
+                f"{self.documents_dir.rstrip('/')}/{stem}.sdr/cover.jpg"
+            )
+            self.upload_to(cover_local, cover_remote, clear_images=False)
+            result["cover_path"] = cover_remote
+        return result

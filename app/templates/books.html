@@ -16,7 +16,7 @@
     <header class="brand">
       <p class="eyebrow">KOReader · documents</p>
       <h1>Enviar Livro</h1>
-      <p class="lede">Envie um arquivo, escolha o formato de saída e o servidor converte com Calibre antes de gravar no Kindle.</p>
+      <p class="lede">Converta, edite título e metadados, anexe uma capa (JPEG no .sdr do KOReader) e envie para o Kindle.</p>
     </header>
 
     <section class="stage books-stage" aria-label="Upload de livro">
@@ -38,6 +38,63 @@
         <p class="book-ready" id="bookReady" {% if not has_book %}hidden{% endif %}>
           Pronto: <code id="bookName">{{ book_name }}</code>
         </p>
+      </div>
+    </section>
+
+    <section class="meta-panel" id="metaPanel" {% if not has_book %}hidden{% endif %} aria-label="Metadados e capa">
+      <h2 class="meta-heading">Metadados</h2>
+      {% if not meta_available %}
+      <p class="field-hint" id="metaWarn">ebook-meta indisponível neste container — a capa ainda vai no sidecar .sdr; o título no arquivo pode não atualizar.</p>
+      {% else %}
+      <p class="field-hint" id="metaWarn" hidden></p>
+      {% endif %}
+
+      <div class="meta-grid">
+        <label class="field">
+          <span class="field-label">Título</span>
+          <input type="text" id="metaTitle" value="{{ metadata.title }}" />
+        </label>
+        <label class="field">
+          <span class="field-label">Autores</span>
+          <input type="text" id="metaAuthors" value="{{ metadata.authors }}" />
+        </label>
+        <label class="field">
+          <span class="field-label">Editora</span>
+          <input type="text" id="metaPublisher" value="{{ metadata.publisher }}" />
+        </label>
+        <label class="field">
+          <span class="field-label">Série</span>
+          <input type="text" id="metaSeries" value="{{ metadata.series }}" />
+        </label>
+        <label class="field">
+          <span class="field-label">Tags</span>
+          <input type="text" id="metaTags" value="{{ metadata.tags }}" />
+        </label>
+        <label class="field">
+          <span class="field-label">Idioma</span>
+          <input type="text" id="metaLanguage" value="{{ metadata.language }}" placeholder="pt / en" />
+        </label>
+        <label class="field field-span">
+          <span class="field-label">Comentários</span>
+          <textarea id="metaComments" rows="3">{{ metadata.comments }}</textarea>
+        </label>
+      </div>
+
+      <div class="cover-row">
+        <div>
+          <p class="field-label">Capa (PNG/JPG)</p>
+          <p class="field-hint">Salva como cover.jpg em NomeDoLivro.sdr/ no Kindle.</p>
+          <input type="file" id="coverInput" accept="image/png,image/jpeg,image/webp,image/bmp,image/gif" hidden />
+          <button type="button" class="btn ghost" id="coverBtn">Escolher capa</button>
+        </div>
+        <figure class="cover-frame" data-empty="{{ 'false' if has_cover else 'true' }}">
+          <img id="coverPreview" src="{{ '/books/cover-preview' if has_cover else '' }}" alt="Capa" {% if not has_cover %}hidden{% endif %} />
+          <figcaption>cover.jpg</figcaption>
+        </figure>
+      </div>
+
+      <div class="controls meta-controls">
+        <button type="button" class="btn" id="applyMetaBtn">Aplicar metadados</button>
       </div>
     </section>
 

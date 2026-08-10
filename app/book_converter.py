@@ -68,18 +68,23 @@ def convert_book(
     return out_path, True
 
 
-def save_book_meta(meta_path: Path, *, local_path: Path, remote_name: str, format: str) -> None:
+def save_book_meta(meta_path: Path, **fields) -> None:
     meta_path.parent.mkdir(parents=True, exist_ok=True)
+    existing: dict = {}
+    if meta_path.is_file():
+        try:
+            existing = json.loads(meta_path.read_text(encoding="utf-8"))
+            if not isinstance(existing, dict):
+                existing = {}
+        except (OSError, json.JSONDecodeError):
+            existing = {}
+    existing.update({k: v for k, v in fields.items() if v is not None})
+    # Normalize path-like values to strings
+    for key in ("local_path", "cover_path"):
+        if key in existing and existing[key] is not None:
+            existing[key] = str(existing[key])
     meta_path.write_text(
-        json.dumps(
-            {
-                "local_path": str(local_path),
-                "remote_name": remote_name,
-                "format": format,
-            },
-            ensure_ascii=False,
-            indent=2,
-        ),
+        json.dumps(existing, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 

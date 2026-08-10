@@ -5,7 +5,7 @@ Painel web em Docker para o Kindle jailbroken: **enviar livros** (Calibre) e **a
 ## Fluxos
 
 1. **Início** (`/`) — escolha Enviar Livro ou Screensaver
-2. **Enviar Livro** (`/books`) — upload → escolha de formato → `ebook-convert` → SFTP em `/mnt/us/documents/`
+2. **Enviar Livro** (`/books`) — upload → formato → editar metadados/capa → SFTP em `/mnt/us/documents/` (+ `Nome.sdr/cover.jpg` se houver capa)
 3. **Screensaver** (`/screensaver`) — imagem e-ink → pasta do screensaver do KOReader
 
 ## Formatos de livro
