@@ -76,7 +76,20 @@ nano .env
 docker compose up -d --build
 ```
 
-Abra `http://IP-DO-SERVIDOR:8080`.
+Abra `http://IP-DO-SERVIDOR:8080` (ou a porta definida em `PORT`).
+
+### Restart loop
+
+```bash
+docker compose logs --tail 80
+```
+
+Causa comum com `network_mode: host`: **porta 8080 já em uso**. No `.env` use outra, ex. `PORT=8090`, e suba de novo:
+
+```bash
+docker compose down
+docker compose up -d --build
+```
 
 ## Uso
 

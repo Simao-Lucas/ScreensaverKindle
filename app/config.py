@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 
 
@@ -6,21 +7,38 @@ def _env(name: str, default: str = "") -> str:
     value = os.getenv(name, default)
     if value is None:
         return default
-    return value.strip().strip('"').strip("'")
+    # Remove BOM, quotes, inline comments and trailing CR from Windows .env
+    value = value.replace("\ufeff", "").strip().strip('"').strip("'")
+    if "#" in value:
+        value = value.split("#", 1)[0].strip()
+    return value.strip()
 
 
 def _env_int(name: str, default: int) -> int:
     raw = _env(name, "")
     if not raw:
         return default
-    return int(raw)
+    match = re.match(r"^-?\d+", raw)
+    if not match:
+        return default
+    try:
+        return int(match.group(0))
+    except ValueError:
+        return default
 
 
 def _env_float(name: str, default: float) -> float:
     raw = _env(name, "")
     if not raw:
         return default
-    return float(raw)
+    raw = raw.replace(",", ".")
+    match = re.match(r"^-?\d+(\.\d+)?", raw)
+    if not match:
+        return default
+    try:
+        return float(match.group(0))
+    except ValueError:
+        return default
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -48,11 +66,9 @@ class Config:
     KINDLE_PASSWORD = _env("KINDLE_PASSWORD", "")
     KINDLE_SSH_KEY = _env("KINDLE_SSH_KEY", "/keys/id_rsa")
     KINDLE_SSH_TIMEOUT = _env_int("KINDLE_SSH_TIMEOUT", 20)
-    # Pasta apontada no KOReader: Screen → Screensaver → pasta customizada
     KINDLE_REMOTE_PATH = _env(
         "KINDLE_REMOTE_PATH", "/mnt/us/screensaver/current.png"
     ) or "/mnt/us/screensaver/current.png"
-    # Opcional. Vazio = só atualiza o arquivo do screensaver (sem abrir KOReader).
     KINDLE_REFRESH_CMD = _env("KINDLE_REFRESH_CMD", "")
     KINDLE_CLEAR_SCREENSAVER_DIR = _env_bool("KINDLE_CLEAR_SCREENSAVER_DIR", True)
 

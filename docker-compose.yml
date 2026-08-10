@@ -3,7 +3,7 @@ services:
     build: .
     container_name: screensaverkindle
     restart: unless-stopped
-    # Mesma rede do Ubuntu — necessário para IPs tipo 10.42.0.x (USB/hotspot)
+    # Mesma rede do Ubuntu — necessário para IPs tipo 10.42.0.x (hotspot)
     network_mode: host
     env_file:
       - .env
@@ -11,5 +11,5 @@ services:
       - ./data:/app/data
       - ./secrets:/keys:ro
     environment:
-      PORT: "8080"
-      KINDLE_SSH_KEY: /keys/id_rsa
+      # Porta da UI no host. Se 8080 estiver ocupada, mude no .env (ex.: PORT=8090)
+      PORT: ${PORT:-8080}
