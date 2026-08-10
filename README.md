@@ -40,7 +40,7 @@ chmod 600 secrets/id_rsa
 docker compose up -d --build
 ```
 
-A build instala o **Calibre** (imagem maior; primeira build demora).
+A build instala o **Calibre** via apt (imagem maior; a primeira build demora).
 
 Abra `http://IP-DO-SERVIDOR:8080`.
 
@@ -61,7 +61,7 @@ docker compose up -d --build
 | `KINDLE_SSH_KEY` | `/keys/id_rsa` |
 | `KINDLE_REMOTE_PATH` | `/mnt/us/screensaver/current.png` |
 | `KINDLE_DOCUMENTS_DIR` | `/mnt/us/documents` |
-| `EBOOK_CONVERT_BIN` | `/usr/local/bin/ebook-convert` |
+| `EBOOK_CONVERT_BIN` | `ebook-convert` |
 | `BOOK_MAX_CONTENT_LENGTH` | `209715200` (200 MB) |
 | `PORT` | `8080` |
 

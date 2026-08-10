@@ -4,27 +4,13 @@ WORKDIR /app
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Calibre via apt (ebook-convert). Mais estável no Docker do que o installer oficial.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         curl \
         ca-certificates \
-        xz-utils \
-        wget \
-        libegl1 \
-        libgl1 \
-        libopengl0 \
-        libxcb-cursor0 \
-        libxkbcommon0 \
-        libnss3 \
-        libxcomposite1 \
-        libxdamage1 \
-        libxrandr2 \
-        libasound2 \
-        libxkbfile1 \
-    && wget -nv -O /tmp/calibre-installer.sh https://download.calibre-ebook.com/linux-installer.sh \
-    && sh /tmp/calibre-installer.sh install_dir=/opt \
-    && ln -sf /opt/calibre/ebook-convert /usr/local/bin/ebook-convert \
-    && rm -f /tmp/calibre-installer.sh \
+        calibre \
+    && ebook-convert --version \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
@@ -38,7 +24,7 @@ RUN chmod +x /entrypoint.sh \
 ENV FLASK_APP=app.main:app
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8080
-ENV EBOOK_CONVERT_BIN=/usr/local/bin/ebook-convert
+ENV EBOOK_CONVERT_BIN=ebook-convert
 
 EXPOSE 8080
 
