@@ -23,6 +23,13 @@ def _env_float(name: str, default: float) -> float:
     return float(raw)
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    raw = _env(name, "")
+    if not raw:
+        return default
+    return raw.lower() in {"1", "true", "yes", "on"}
+
+
 class Config:
     SECRET_KEY = _env("SECRET_KEY", "dev-secret") or "dev-secret"
     BASE_DIR = Path(__file__).resolve().parent.parent
@@ -40,13 +47,13 @@ class Config:
     KINDLE_USER = _env("KINDLE_USER", "root") or "root"
     KINDLE_PASSWORD = _env("KINDLE_PASSWORD", "")
     KINDLE_SSH_TIMEOUT = _env_int("KINDLE_SSH_TIMEOUT", 20)
+    # Pasta apontada no KOReader: Screen → Screensaver → pasta customizada
     KINDLE_REMOTE_PATH = _env(
-        "KINDLE_REMOTE_PATH", "/mnt/us/display/current.png"
-    ) or "/mnt/us/display/current.png"
-    KINDLE_REFRESH_CMD = _env(
-        "KINDLE_REFRESH_CMD",
-        "/mnt/us/koreader/koreader.sh /mnt/us/display/current.png",
-    ) or "/mnt/us/koreader/koreader.sh /mnt/us/display/current.png"
+        "KINDLE_REMOTE_PATH", "/mnt/us/screensaver/current.png"
+    ) or "/mnt/us/screensaver/current.png"
+    # Opcional. Vazio = só atualiza o arquivo do screensaver (sem abrir KOReader).
+    KINDLE_REFRESH_CMD = _env("KINDLE_REFRESH_CMD", "")
+    KINDLE_CLEAR_SCREENSAVER_DIR = _env_bool("KINDLE_CLEAR_SCREENSAVER_DIR", True)
 
     MAX_CONTENT_LENGTH = 20 * 1024 * 1024
     ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "bmp", "gif"}

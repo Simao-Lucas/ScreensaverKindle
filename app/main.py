@@ -34,7 +34,8 @@ def kindle_client() -> KindleClient:
         password=cfg["KINDLE_PASSWORD"],
         timeout=cfg["KINDLE_SSH_TIMEOUT"],
         remote_path=cfg["KINDLE_REMOTE_PATH"],
-        refresh_cmd=cfg["KINDLE_REFRESH_CMD"],
+        refresh_cmd=cfg.get("KINDLE_REFRESH_CMD", "") or "",
+        clear_screensaver_dir=cfg.get("KINDLE_CLEAR_SCREENSAVER_DIR", True),
     )
 
 
@@ -52,6 +53,7 @@ def index():
         width=current_app.config["KINDLE_WIDTH"],
         height=current_app.config["KINDLE_HEIGHT"],
         host=current_app.config["KINDLE_HOST"] or "(não configurado)",
+        remote_path=current_app.config["KINDLE_REMOTE_PATH"],
     )
 
 
@@ -113,7 +115,7 @@ def upload():
         {
             "ok": True,
             "message": "Imagem convertida para e-ink.",
-            "status": {"converted": True, "transferred": False, "displayed": False},
+            "status": {"converted": True, "transferred": False, "ready": False},
             "preview_url": "/preview",
         }
     )
@@ -142,7 +144,7 @@ def push():
                 "status": {
                     "converted": True,
                     "transferred": False,
-                    "displayed": False,
+                    "ready": False,
                 },
             }
         ), 502
@@ -150,11 +152,14 @@ def push():
     return jsonify(
         {
             "ok": True,
-            "message": "Imagem enviada e refresh disparado.",
+            "message": (
+                "Imagem na pasta do screensaver do KOReader. "
+                "Ela aparece quando o Kindle entrar em sleep."
+            ),
             "status": {
                 "converted": True,
                 "transferred": True,
-                "displayed": True,
+                "ready": True,
             },
             "detail": result,
         }

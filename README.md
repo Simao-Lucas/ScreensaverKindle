@@ -1,20 +1,29 @@
 # ScreensaverKindle
 
-Painel web em Docker que converte imagens para o e-ink do Kindle Paperwhite e envia via SCP/SSH.
+Painel web em Docker que converte imagens para o e-ink do Kindle Paperwhite e atualiza a pasta de **screensaver do KOReader**.
 
 ## O que faz (Fase 1)
 
 1. Upload de PNG/JPG/WEBP (drag & drop)
 2. Conversão automática: cover crop → grayscale → contraste → PNG `1072×1448`
-3. Envio para o Kindle (`SCP`) e disparo do comando de refresh (`SSH`)
+3. Envio via SSH/SFTP para a pasta de screensaver do KOReader
+4. A imagem aparece quando o Kindle entra em **sleep** (não abre o arquivo no visualizador)
 
 ## Requisitos
 
 - Ubuntu com Docker e Docker Compose
 - Kindle jailbroken com SSH acessível na rede (ex.: USBNetwork / wifi, porta `2222`)
-- KOReader (ou outro comando) capaz de abrir o PNG remoto
+- KOReader com screensaver por pasta de imagens customizadas
 
-## Configuração
+## Configurar o KOReader (uma vez)
+
+1. No Kindle, a pasta padrão do app é `/mnt/us/screensaver` (criada no primeiro envio)
+2. No KOReader: **Screen → Screensaver**
+3. Escolha wallpaper / imagens da pasta (random ou single)
+4. Aponte para a pasta `screensaver` (long-press para confirmar)
+5. Ideal: deixe só essa pasta para o app (ele limpa PNG/JPG antigos a cada envio)
+
+## Configuração do servidor
 
 ```bash
 cp .env.example .env
@@ -31,11 +40,10 @@ Variáveis importantes:
 | `KINDLE_PASSWORD` | Senha SSH | — |
 | `KINDLE_WIDTH` / `KINDLE_HEIGHT` | Resolução alvo | `1072` / `1448` |
 | `KINDLE_CONTRAST` | Contraste da conversão | `1.15` |
-| `KINDLE_REMOTE_PATH` | Caminho do PNG no Kindle | `/mnt/us/display/current.png` |
-| `KINDLE_REFRESH_CMD` | Comando SSH após o upload | `koreader.sh …/current.png` |
-| `PORT` | Porta HTTP (host network) | `8080` |
-
-Ajuste `KINDLE_REFRESH_CMD` quando descobrir o comando certo no seu KOReader/KUAL.
+| `KINDLE_REMOTE_PATH` | PNG na pasta do screensaver | `/mnt/us/screensaver/current.png` |
+| `KINDLE_CLEAR_SCREENSAVER_DIR` | Limpa outras imagens da pasta | `true` |
+| `KINDLE_REFRESH_CMD` | Comando SSH opcional pós-envio | vazio |
+| `PORT` | Porta HTTP publicada | `8080` |
 
 ## Subir no Ubuntu
 
@@ -45,33 +53,15 @@ docker compose up -d --build
 
 Abra `http://IP-DO-SERVIDOR:8080`.
 
-O compose publica a porta `${PORT:-8080}` e o container alcança o Kindle pela LAN do host (bridge). Se a porta estiver ocupada, mude `PORT` no `.env`.
+O compose publica a porta `${PORT:-8080}`. Se o container não alcança o Kindle (SSH no host funciona, no Docker não), use `network_mode: host` no `docker-compose.yml`.
 
 ### Se o container ficar reiniciando
 
 ```bash
 docker compose logs --tail 100
 docker compose ps
-```
-
-Causas comuns: porta 8080 em uso, `.env` com valores inválidos, ou erro de import na build antiga. Depois de atualizar o código:
-
-```bash
 docker compose down
 docker compose up -d --build
-```
-
-
-Logs:
-
-```bash
-docker compose logs -f
-```
-
-Parar:
-
-```bash
-docker compose down
 ```
 
 ## Uso
@@ -79,8 +69,9 @@ docker compose down
 1. Solte ou escolha uma imagem
 2. Confira o preview em tons de cinza
 3. Clique em **Enviar para Kindle**
+4. Coloque o Kindle em sleep para ver a nova imagem
 
-Status na UI: Convertida → Transferida → Exibida.
+Status na UI: Convertida → Transferida → No screensaver.
 
 ## Estrutura
 
@@ -88,19 +79,11 @@ Status na UI: Convertida → Transferida → Exibida.
 app/
   main.py             # rotas Flask
   image_pipeline.py   # conversão Pillow
-  kindle_client.py    # SCP + SSH (Paramiko)
+  kindle_client.py    # SFTP + SSH (Paramiko)
   templates/          # UI
   static/
 data/uploads/         # current.png + preview (volume)
 Dockerfile
 docker-compose.yml
 .env.example
-```
-
-## Nota sobre o refresh
-
-Se o upload funcionar mas a tela não mudar, o problema quase sempre é `KINDLE_REFRESH_CMD`. No Kindle, confira o script do KUAL/KOReader e atualize a variável no `.env`, depois:
-
-```bash
-docker compose up -d
 ```

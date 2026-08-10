@@ -15,7 +15,7 @@
     <header class="brand">
       <p class="eyebrow">Paperwhite · {{ width }}×{{ height }}</p>
       <h1>ScreensaverKindle</h1>
-      <p class="lede">Envie uma imagem. O servidor converte para e-ink e empurra para o Kindle via SSH.</p>
+      <p class="lede">Converte a imagem para e-ink e atualiza a pasta de screensaver do KOReader. Ela aparece quando o Kindle dorme.</p>
     </header>
 
     <section class="stage" aria-label="Upload e preview">
@@ -36,13 +36,13 @@
       <button type="button" class="btn primary" id="pushBtn" {% if not has_current %}disabled{% endif %}>
         Enviar para Kindle
       </button>
-      <p class="target">Destino: <code>{{ host }}</code></p>
+      <p class="target">Destino: <code>{{ host }}</code> → <code>{{ remote_path }}</code></p>
     </section>
 
     <ul class="status" id="statusList" aria-live="polite">
       <li data-key="converted" class="{% if has_current %}done{% endif %}">Convertida</li>
       <li data-key="transferred">Transferida</li>
-      <li data-key="displayed">Exibida</li>
+      <li data-key="ready">No screensaver</li>
     </ul>
     <p class="message" id="message" role="status"></p>
   </main>

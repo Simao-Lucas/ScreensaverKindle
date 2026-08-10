@@ -34,7 +34,7 @@
   async function uploadFile(file) {
     if (!file) return;
     setMessage("Convertendo imagem…");
-    setStatus({ converted: false, transferred: false, displayed: false });
+    setStatus({ converted: false, transferred: false, ready: false });
     pushBtn.disabled = true;
 
     const body = new FormData();
@@ -59,7 +59,7 @@
 
   async function pushToKindle() {
     setMessage("Enviando para o Kindle…");
-    setStatus({ converted: true, transferred: false, displayed: false });
+    setStatus({ converted: true, transferred: false, ready: false });
     pushBtn.disabled = true;
 
     try {
@@ -69,16 +69,16 @@
         setStatus({
           converted: true,
           transferred: "fail",
-          displayed: "fail",
+          ready: "fail",
         });
         setMessage(data.error || "Falha ao enviar.", "error");
         pushBtn.disabled = false;
         return;
       }
-      setStatus(data.status || { converted: true, transferred: true, displayed: true });
+      setStatus(data.status || { converted: true, transferred: true, ready: true });
       setMessage(data.message || "Enviado.", "ok");
     } catch (err) {
-      setStatus({ converted: true, transferred: "fail", displayed: "fail" });
+      setStatus({ converted: true, transferred: "fail", ready: "fail" });
       setMessage(`Erro de rede: ${err.message}`, "error");
     } finally {
       pushBtn.disabled = false;
