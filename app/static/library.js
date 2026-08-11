@@ -20,6 +20,7 @@
   const renameBtn = document.getElementById("renameBtn");
   const deleteBtn = document.getElementById("deleteBtn");
   const upBtn = document.getElementById("upBtn");
+  const selectAll = document.getElementById("selectAll");
 
   const fields = {
     title: document.getElementById("dTitle"),
@@ -35,7 +36,8 @@
   let entries = [];
   let collections = [];
   let current = null;
-  let selectedRel = null;
+  let selectedRels = new Set();
+  let lastClickedRel = null;
   let clipboard = null;
   let contextTarget = null;
   let pendingCoverFile = null;
@@ -112,17 +114,39 @@
     return `/api/library/books/${parts}${suffix}`;
   }
 
-  function selectedEntry() {
-    return entries.find((e) => e.rel === selectedRel) || null;
+  function selectedEntries() {
+    return entries.filter((e) => selectedRels.has(e.rel));
+  }
+
+  function primarySelected() {
+    const list = selectedEntries();
+    if (!list.length) return null;
+    if (lastClickedRel) {
+      const hit = list.find((e) => e.rel === lastClickedRel);
+      if (hit) return hit;
+    }
+    return list[0];
+  }
+
+  function setSelection(rels, { anchor } = {}) {
+    selectedRels = new Set(rels);
+    if (anchor !== undefined) lastClickedRel = anchor;
+    renderEntries();
   }
 
   function updateActionUi() {
-    const entry = selectedEntry();
-    cutBtn.disabled = !entry;
+    const selected = selectedEntries();
+    const count = selected.length;
+    const one = count === 1 ? selected[0] : null;
+    cutBtn.disabled = count === 0;
     pasteBtn.disabled = !clipboard || !clipboard.sources.length;
-    renameBtn.disabled = !entry;
-    deleteBtn.disabled = !entry;
-    editBtn.disabled = !(entry && entry.type === "file");
+    renameBtn.disabled = count !== 1;
+    deleteBtn.disabled = count === 0;
+    editBtn.disabled = !(one && one.type === "file");
+    if (selectAll) {
+      selectAll.checked = entries.length > 0 && count === entries.length;
+      selectAll.indeterminate = count > 0 && count < entries.length;
+    }
   }
 
   function hideContext() {
@@ -180,8 +204,9 @@
     btn.addEventListener("drop", async (e) => {
       e.preventDefault();
       btn.classList.remove("drop-target");
-      const src = e.dataTransfer.getData("text/plain");
-      if (src) await moveTo(src, node.rel || "");
+      const raw = e.dataTransfer.getData("text/plain");
+      const sources = raw.split("\n").map((s) => s.trim()).filter(Boolean);
+      if (sources.length) await moveTo(sources, node.rel || "");
     });
     wrap.appendChild(btn);
     (node.children || []).forEach((child) => {
@@ -205,28 +230,40 @@
     entries.forEach((entry) => {
       const tr = document.createElement("tr");
       tr.className = "explorer-row";
-      if (entry.rel === selectedRel) tr.classList.add("is-selected");
+      if (selectedRels.has(entry.rel)) tr.classList.add("is-selected");
       tr.dataset.rel = entry.rel;
       tr.dataset.type = entry.type;
       tr.draggable = true;
       const typeLabel =
         entry.type === "dir" ? "Pasta" : (entry.name.split(".").pop() || "arquivo").toUpperCase();
       const star = entry.favorite ? " ★" : "";
-      const label = escapeHtml(entry.title || entry.name) + star;
+      const title = escapeHtml((entry.title || entry.name) + star);
+      const fileName = escapeHtml(entry.name);
+      const showFile = entry.type === "file" && entry.title && entry.title !== entry.name;
       const editBtnHtml =
         entry.type === "file"
           ? `<button type="button" class="btn ghost row-action" data-row-edit="${escapeHtml(entry.rel)}">Editar</button>`
           : "";
       tr.innerHTML = `
+        <td class="col-check">
+          <input type="checkbox" class="row-check" data-rel="${escapeHtml(entry.rel)}" ${selectedRels.has(entry.rel) ? "checked" : ""} aria-label="Selecionar ${fileName}" />
+        </td>
         <td class="col-name">
-          <span class="entry-icon entry-icon-${entry.type}" aria-hidden="true"></span>
-          <span class="entry-label">${label}</span>
+          <div class="name-cell">
+            <span class="entry-icon entry-icon-${entry.type}" aria-hidden="true"></span>
+            <span class="entry-text">
+              <span class="entry-label">${title}</span>
+              ${showFile ? `<span class="entry-file">${fileName}</span>` : ""}
+            </span>
+          </div>
         </td>
         <td>${typeLabel}</td>
         <td>${entry.type === "dir" ? "—" : formatSize(entry.size)}</td>
         <td class="col-actions">
-          ${editBtnHtml}
-          <button type="button" class="btn ghost danger-text row-action" data-row-del="${escapeHtml(entry.rel)}" data-row-type="${entry.type}">Excluir</button>
+          <div class="actions-cell">
+            ${editBtnHtml}
+            <button type="button" class="btn ghost danger-text row-action" data-row-del="${escapeHtml(entry.rel)}" data-row-type="${entry.type}">Excluir</button>
+          </div>
         </td>`;
       explorerBody.appendChild(tr);
     });
@@ -250,7 +287,8 @@
   async function browse(path = "") {
     setListMessage("Carregando…");
     currentPath = path || "";
-    selectedRel = null;
+    selectedRels = new Set();
+    lastClickedRel = null;
     const res = await fetch(`/api/library/browse?path=${encodeURIComponent(currentPath)}`);
     const data = await res.json();
     if (!res.ok || !data.ok) {
@@ -276,18 +314,20 @@
     await browse(currentPath);
   }
 
-  async function moveTo(sourceRel, destRel) {
-    if (!sourceRel) return;
-    if (sourceRel === destRel) return;
-    if (destRel === sourceRel || destRel.startsWith(sourceRel + "/")) {
-      setListMessage("Não é possível mover para dentro de si.", "error");
-      return;
+  async function moveTo(sources, destRel) {
+    const list = Array.isArray(sources) ? sources.filter(Boolean) : [sources].filter(Boolean);
+    if (!list.length) return;
+    for (const sourceRel of list) {
+      if (sourceRel === destRel || destRel.startsWith(sourceRel + "/")) {
+        setListMessage("Não é possível mover para dentro de si.", "error");
+        return;
+      }
     }
     setListMessage("Movendo…");
     const r = await fetch("/api/library/move", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sources: [sourceRel], dest: destRel }),
+      body: JSON.stringify({ sources: list, dest: destRel }),
     });
     const d = await r.json();
     if (!r.ok || !d.ok) {
@@ -431,8 +471,7 @@
       renderMembership();
       setDetailMessage("Salvo no Kindle (nome, metadados e capa).", "ok");
       await refreshAll();
-      selectedRel = current.name;
-      renderEntries();
+      setSelection([current.name], { anchor: current.name });
     } catch (err) {
       setDetailMessage(err.message || "Falha ao salvar.", "error");
     }
@@ -476,35 +515,65 @@
     setListMessage("Renomeado.", "ok");
   }
 
-  async function deleteSelected(rel, type) {
-    const label = rel.split("/").pop();
-    const msg =
-      type === "dir"
-        ? `Apagar a pasta "${label}" e todo o conteúdo?`
-        : `Excluir "${label}" e a pasta .sdr?`;
-    if (!confirm(msg)) return;
-    const r = await fetch(`/api/library/entry?path=${encodeURIComponent(rel)}`, {
-      method: "DELETE",
-    });
-    const d = await r.json();
-    if (!r.ok || !d.ok) {
-      setListMessage(d.error || "Falha ao excluir.", "error");
-      return;
+  async function deleteEntries(items) {
+    if (!items.length) return;
+    const label =
+      items.length === 1
+        ? items[0].type === "dir"
+          ? `Apagar a pasta "${items[0].name}" e todo o conteúdo?`
+          : `Excluir "${items[0].name}" e a pasta .sdr?`
+        : `Excluir ${items.length} itens selecionados?`;
+    if (!confirm(label)) return;
+
+    let failed = null;
+    for (const item of items) {
+      const r = await fetch(`/api/library/entry?path=${encodeURIComponent(item.rel)}`, {
+        method: "DELETE",
+      });
+      const d = await r.json();
+      if (!r.ok || !d.ok) {
+        failed = d.error || `Falha ao excluir ${item.name}`;
+        break;
+      }
+      if (current && (current.name === item.rel || current.name.startsWith(item.rel + "/"))) {
+        current = null;
+        clearPendingCover();
+        detailPanel.hidden = true;
+      }
     }
-    if (current && (current.name === rel || current.name.startsWith(rel + "/"))) {
-      current = null;
-      clearPendingCover();
-      detailPanel.hidden = true;
-    }
-    selectedRel = null;
+    selectedRels = new Set();
+    lastClickedRel = null;
     await refreshAll();
-    setListMessage(d.message || "Excluído.", "ok");
+    if (failed) setListMessage(failed, "error");
+    else setListMessage(items.length === 1 ? "Excluído." : `${items.length} itens excluídos.`, "ok");
   }
 
   function deleteCurrentSelection() {
-    const entry = selectedEntry();
-    if (!entry) return;
-    return deleteSelected(entry.rel, entry.type);
+    return deleteEntries(selectedEntries());
+  }
+
+  function selectRange(fromRel, toRel) {
+    const i0 = entries.findIndex((e) => e.rel === fromRel);
+    const i1 = entries.findIndex((e) => e.rel === toRel);
+    if (i0 < 0 || i1 < 0) return [toRel];
+    const a = Math.min(i0, i1);
+    const b = Math.max(i0, i1);
+    return entries.slice(a, b + 1).map((e) => e.rel);
+  }
+
+  function applyRowClick(rel, { ctrl, shift, fromCheckbox } = {}) {
+    if (shift && lastClickedRel) {
+      setSelection(selectRange(lastClickedRel, rel), { anchor: lastClickedRel });
+      return;
+    }
+    if (ctrl || fromCheckbox) {
+      const next = new Set(selectedRels);
+      if (next.has(rel)) next.delete(rel);
+      else next.add(rel);
+      setSelection([...next], { anchor: rel });
+      return;
+    }
+    setSelection([rel], { anchor: rel });
   }
 
   // --- events ---
@@ -525,21 +594,32 @@
   );
   document.getElementById("newFolderBtn").addEventListener("click", createFolder);
 
+  if (selectAll) {
+    selectAll.addEventListener("change", () => {
+      if (selectAll.checked) setSelection(entries.map((e) => e.rel));
+      else setSelection([]);
+    });
+  }
+
   editBtn.addEventListener("click", () => {
-    const entry = selectedEntry();
+    const entry = primarySelected();
     if (entry && entry.type === "file") openBook(entry.rel);
   });
   renameBtn.addEventListener("click", () => {
-    const entry = selectedEntry();
+    const entry = primarySelected();
     if (entry) renameSelected(entry.rel);
   });
   deleteBtn.addEventListener("click", () => deleteCurrentSelection());
 
   cutBtn.addEventListener("click", () => {
-    if (!selectedRel) return;
-    clipboard = { sources: [selectedRel] };
+    const selected = selectedEntries();
+    if (!selected.length) return;
+    clipboard = { sources: selected.map((e) => e.rel) };
     updateActionUi();
-    setListMessage(`Recortado: ${selectedRel}`, "ok");
+    setListMessage(
+      selected.length === 1 ? `Recortado: ${selected[0].rel}` : `Recortados: ${selected.length} itens`,
+      "ok"
+    );
   });
 
   pasteBtn.addEventListener("click", async () => {
@@ -564,27 +644,34 @@
     const edit = e.target.closest("[data-row-edit]");
     if (edit) {
       e.stopPropagation();
-      selectedRel = edit.dataset.rowEdit;
-      renderEntries();
+      setSelection([edit.dataset.rowEdit], { anchor: edit.dataset.rowEdit });
       openBook(edit.dataset.rowEdit);
       return;
     }
     const del = e.target.closest("[data-row-del]");
     if (del) {
       e.stopPropagation();
-      selectedRel = del.dataset.rowDel;
-      renderEntries();
-      deleteSelected(del.dataset.rowDel, del.dataset.rowType);
+      const entry = entries.find((x) => x.rel === del.dataset.rowDel);
+      if (entry) deleteEntries([entry]);
+      return;
+    }
+    const check = e.target.closest(".row-check");
+    if (check) {
+      e.stopPropagation();
+      applyRowClick(check.dataset.rel, {
+        ctrl: e.ctrlKey || e.metaKey,
+        shift: e.shiftKey,
+        fromCheckbox: true,
+      });
       return;
     }
     const row = e.target.closest(".explorer-row");
     if (!row) return;
-    selectedRel = row.dataset.rel;
-    renderEntries();
+    applyRowClick(row.dataset.rel, { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey });
   });
 
   explorerBody.addEventListener("dblclick", (e) => {
-    if (e.target.closest(".row-action")) return;
+    if (e.target.closest(".row-action") || e.target.closest(".row-check")) return;
     const row = e.target.closest(".explorer-row");
     if (!row) return;
     if (row.dataset.type === "dir") browse(row.dataset.rel);
@@ -595,8 +682,11 @@
     const row = e.target.closest(".explorer-row");
     e.preventDefault();
     if (row) {
-      selectedRel = row.dataset.rel;
-      renderEntries();
+      if (!selectedRels.has(row.dataset.rel)) {
+        setSelection([row.dataset.rel], { anchor: row.dataset.rel });
+      } else {
+        renderEntries();
+      }
       const entry = entries.find((x) => x.rel === row.dataset.rel);
       showContext(e.clientX, e.clientY, entry);
     } else {
@@ -613,7 +703,13 @@
   explorerBody.addEventListener("dragstart", (e) => {
     const row = e.target.closest(".explorer-row");
     if (!row) return;
-    e.dataTransfer.setData("text/plain", row.dataset.rel);
+    if (!selectedRels.has(row.dataset.rel)) {
+      setSelection([row.dataset.rel], { anchor: row.dataset.rel });
+    }
+    const sources = selectedRels.has(row.dataset.rel)
+      ? [...selectedRels]
+      : [row.dataset.rel];
+    e.dataTransfer.setData("text/plain", sources.join("\n"));
     e.dataTransfer.effectAllowed = "move";
     row.classList.add("is-dragging");
   });
@@ -641,8 +737,9 @@
     if (!row || row.dataset.type !== "dir") return;
     e.preventDefault();
     row.classList.remove("drop-target");
-    const src = e.dataTransfer.getData("text/plain");
-    if (src) await moveTo(src, row.dataset.rel);
+    const raw = e.dataTransfer.getData("text/plain");
+    const sources = raw.split("\n").map((s) => s.trim()).filter(Boolean);
+    if (sources.length) await moveTo(sources, row.dataset.rel);
   });
 
   contextMenu.addEventListener("click", async (e) => {
@@ -663,10 +760,15 @@
       return;
     }
     if (action === "cut" && target.rel && target.type !== "pane") {
-      clipboard = { sources: [target.rel] };
-      selectedRel = target.rel;
+      const sources = selectedRels.has(target.rel)
+        ? [...selectedRels]
+        : [target.rel];
+      clipboard = { sources };
       updateActionUi();
-      setListMessage(`Recortado: ${target.rel}`, "ok");
+      setListMessage(
+        sources.length === 1 ? `Recortado: ${sources[0]}` : `Recortados: ${sources.length} itens`,
+        "ok"
+      );
       return;
     }
     if (action === "paste") {
@@ -692,7 +794,10 @@
       return;
     }
     if (action === "delete" && target.type !== "pane") {
-      await deleteSelected(target.rel, target.type);
+      const items = selectedRels.has(target.rel)
+        ? selectedEntries()
+        : [entries.find((x) => x.rel === target.rel)].filter(Boolean);
+      await deleteEntries(items);
       return;
     }
     if (action === "mkdir") await createFolder();
@@ -706,12 +811,15 @@
     if (e.key === "Escape") hideContext();
     const tag = document.activeElement && document.activeElement.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA") return;
-    if (e.key === "Delete" && selectedRel) {
-      const entry = selectedEntry();
-      if (entry) deleteSelected(entry.rel, entry.type);
+    if (e.key === "Delete" && selectedRels.size) {
+      deleteCurrentSelection();
     }
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "x" && selectedRel) {
-      clipboard = { sources: [selectedRel] };
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
+      e.preventDefault();
+      setSelection(entries.map((x) => x.rel));
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "x" && selectedRels.size) {
+      clipboard = { sources: [...selectedRels] };
       updateActionUi();
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v" && clipboard) {
@@ -763,7 +871,8 @@
 
   document.getElementById("deleteBookBtn").addEventListener("click", async () => {
     if (!current) return;
-    await deleteSelected(current.name, "file");
+    const entry = { rel: current.name, name: current.name.split("/").pop(), type: "file" };
+    await deleteEntries([entry]);
   });
 
   document.getElementById("closeDetailBtn").addEventListener("click", () => {
