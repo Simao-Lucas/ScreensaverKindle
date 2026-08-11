@@ -16,32 +16,52 @@
     <header class="brand">
       <p class="eyebrow">KOReader · remoto</p>
       <h1>Biblioteca</h1>
-      <p class="lede">Livros em <code>{{ documents_dir }}</code> no Kindle (<code>{{ host }}</code>). Edite metadados, capas, coleções e favoritos. Após mudar coleções, reinicie o KOReader.</p>
+      <p class="lede">Explorador de <code>{{ documents_dir }}</code> no Kindle (<code>{{ host }}</code>). Arraste para mover; pastas <code>.sdr</code> acompanham o livro. Após mudar coleções, reinicie o KOReader.</p>
     </header>
 
-    <section class="library-layout">
-      <aside class="library-side">
-        <h2 class="meta-heading">Coleções</h2>
-        <ul class="collection-list" id="collectionList"></ul>
-        <div class="collection-create">
-          <input type="text" id="newCollectionName" placeholder="Nova coleção" />
-          <button type="button" class="btn" id="createCollectionBtn">Criar</button>
-        </div>
-        <p class="field-hint">Favoritos = coleção nativa <code>favorites</code>.</p>
+    <section class="explorer-layout">
+      <aside class="explorer-tree-pane" aria-label="Pastas">
+        <div class="explorer-tree-head">Pastas</div>
+        <div class="folder-tree" id="folderTree"></div>
       </aside>
 
-      <section class="library-main">
-        <div class="library-toolbar">
-          <button type="button" class="btn" id="refreshBtn">Atualizar lista</button>
-          <select id="filterCollection" class="format-select">
-            <option value="">Todas</option>
-            <option value="favorites">Favoritos</option>
-          </select>
+      <section class="explorer-main">
+        <div class="explorer-toolbar">
+          <button type="button" class="btn ghost" id="upBtn" title="Pasta acima">↑</button>
+          <nav class="breadcrumb" id="breadcrumb" aria-label="Caminho"></nav>
+          <div class="explorer-actions">
+            <button type="button" class="btn" id="newFolderBtn">Nova pasta</button>
+            <button type="button" class="btn" id="cutBtn" disabled>Recortar</button>
+            <button type="button" class="btn" id="pasteBtn" disabled>Colar</button>
+            <button type="button" class="btn" id="refreshBtn">Atualizar</button>
+          </div>
         </div>
-        <ul class="book-list" id="bookList" aria-live="polite"></ul>
+
+        <div class="explorer-table-wrap">
+          <table class="explorer-table" id="explorerTable">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Tipo</th>
+                <th>Tamanho</th>
+              </tr>
+            </thead>
+            <tbody id="explorerBody"></tbody>
+          </table>
+          <p class="book-empty" id="emptyHint" hidden>Pasta vazia.</p>
+        </div>
         <p class="message" id="listMessage" role="status"></p>
       </section>
     </section>
+
+    <div class="context-menu" id="contextMenu" hidden>
+      <button type="button" data-action="open">Abrir</button>
+      <button type="button" data-action="cut">Recortar</button>
+      <button type="button" data-action="paste">Colar aqui</button>
+      <button type="button" data-action="rename">Renomear</button>
+      <button type="button" data-action="delete" class="danger-text">Excluir</button>
+      <button type="button" data-action="mkdir">Nova pasta</button>
+    </div>
 
     <section class="meta-panel detail-panel" id="detailPanel" hidden>
       <h2 class="meta-heading" id="detailTitle">Livro</h2>

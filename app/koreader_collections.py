@@ -256,3 +256,31 @@ def collections_for_file(
         for name, coll in collections.items()
         if any(it.file == file_path for it in coll.items)
     )
+
+
+def rewrite_collection_paths(
+    collections: dict[str, Collection],
+    old_path: str,
+    new_path: str,
+    *,
+    is_prefix: bool = False,
+) -> tuple[dict[str, Collection], bool]:
+    """
+    Rewrite absolute file paths in collections after move/rename.
+    If is_prefix, update every path that equals old_path or starts with old_path/.
+    """
+    data = ensure_favorites(collections)
+    old = old_path.rstrip("/")
+    new = new_path.rstrip("/")
+    changed = False
+    for coll in data.values():
+        for item in coll.items:
+            file = item.file
+            if is_prefix:
+                if file == old or file.startswith(old + "/"):
+                    item.file = new + file[len(old) :]
+                    changed = True
+            elif file == old:
+                item.file = new
+                changed = True
+    return data, changed

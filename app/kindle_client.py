@@ -193,6 +193,20 @@ class KindleClient:
             result["cover_path"] = cover_remote
         return result
 
+    def remote_is_dir(self, remote_path: str) -> bool:
+        client = self._connect()
+        try:
+            sftp = client.open_sftp()
+            try:
+                attr = sftp.stat(remote_path)
+                return self._is_dir_mode(attr.st_mode)
+            except OSError:
+                return False
+            finally:
+                sftp.close()
+        finally:
+            client.close()
+
     def list_documents(self, extensions: set[str] | None = None) -> list[dict]:
         """List book files in documents_dir (not .sdr folders)."""
         extensions = {e.lower().lstrip(".") for e in (extensions or set())}
@@ -341,8 +355,233 @@ class KindleClient:
             client.close()
 
     def delete_document(self, remote_name: str) -> None:
+        """Delete a book file and its sibling .sdr folder (supports subfolders)."""
+        abs_path = self.resolve_under_documents(remote_name)
+        parent = self._parent_dir(abs_path)
+        stem = Path(remote_name).stem
+        self.remove_remote(abs_path)
+        self.remove_remote(f"{parent}/{stem}.sdr")
+
+    def resolve_under_documents(self, relative: str = "") -> str:
+        """Return absolute path under documents_dir; reject path traversal."""
         docs = self.documents_dir.rstrip("/")
-        name = remote_name.lstrip("/")
+        rel = (relative or "").replace("\\", "/").strip("/")
+        if any(part == ".." for part in rel.split("/") if part):
+            raise KindleError("Caminho inválido.")
+        if not rel:
+            return docs
+        return f"{docs}/{rel}"
+
+    def relative_to_documents(self, absolute: str) -> str:
+        docs = self.documents_dir.rstrip("/")
+        path = (absolute or "").replace("\\", "/").rstrip("/")
+        if path == docs:
+            return ""
+        prefix = docs + "/"
+        if not path.startswith(prefix):
+            raise KindleError("Caminho fora de documents.")
+        return path[len(prefix) :]
+
+    def _is_dir_mode(self, st_mode: int) -> bool:
+        return (st_mode & 0o170000) == 0o040000
+
+    def list_dir(
+        self,
+        relative_path: str = "",
+        extensions: set[str] | None = None,
+    ) -> list[dict]:
+        """List folders and book files in a documents subfolder (hides .sdr)."""
+        extensions = {e.lower().lstrip(".") for e in (extensions or set())}
+        abs_dir = self.resolve_under_documents(relative_path)
+        client = self._connect()
+        try:
+            sftp = client.open_sftp()
+            try:
+                entries: list[dict] = []
+                for attr in sftp.listdir_attr(abs_dir):
+                    name = attr.filename
+                    if name.startswith("."):
+                        continue
+                    if name.endswith(".sdr"):
+                        continue
+                    rel = f"{relative_path.strip('/')}/{name}".strip("/")
+                    abs_path = f"{abs_dir.rstrip('/')}/{name}"
+                    if self._is_dir_mode(attr.st_mode):
+                        entries.append(
+                            {
+                                "name": name,
+                                "type": "dir",
+                                "rel": rel,
+                                "path": abs_path,
+                                "size": 0,
+                                "mtime": int(attr.st_mtime or 0),
+                            }
+                        )
+                        continue
+                    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+                    if extensions and ext not in extensions:
+                        continue
+                    stem = Path(name).stem
+                    cover_remote = f"{abs_dir}/{stem}.sdr/cover.jpg"
+                    has_cover = False
+                    try:
+                        sftp.stat(cover_remote)
+                        has_cover = True
+                    except OSError:
+                        try:
+                            cover_remote = f"{abs_dir}/{stem}.sdr/cover.png"
+                            sftp.stat(cover_remote)
+                            has_cover = True
+                        except OSError:
+                            cover_remote = ""
+                    entries.append(
+                        {
+                            "name": name,
+                            "type": "file",
+                            "rel": rel,
+                            "path": abs_path,
+                            "size": int(attr.st_size or 0),
+                            "mtime": int(attr.st_mtime or 0),
+                            "has_cover": has_cover,
+                            "cover_remote": cover_remote,
+                            "sdr_dir": f"{abs_dir}/{stem}.sdr",
+                        }
+                    )
+                entries.sort(
+                    key=lambda e: (0 if e["type"] == "dir" else 1, e["name"].lower())
+                )
+                return entries
+            finally:
+                sftp.close()
+        except KindleError:
+            raise
+        except (paramiko.SSHException, OSError) as exc:
+            raise KindleError(f"Falha ao listar pasta: {exc}") from exc
+        finally:
+            client.close()
+
+    def list_folder_tree(self) -> dict:
+        """Return nested folder tree under documents (no .sdr)."""
+        client = self._connect()
+        try:
+            sftp = client.open_sftp()
+
+            def walk_sftp(rel: str) -> dict:
+                abs_dir = self.resolve_under_documents(rel)
+                children: list[dict] = []
+                try:
+                    attrs = sftp.listdir_attr(abs_dir)
+                except OSError as exc:
+                    raise KindleError(f"Falha ao ler árvore: {exc}") from exc
+                dirs = []
+                for attr in attrs:
+                    name = attr.filename
+                    if name.startswith(".") or name.endswith(".sdr"):
+                        continue
+                    if not self._is_dir_mode(attr.st_mode):
+                        continue
+                    dirs.append(name)
+                dirs.sort(key=str.lower)
+                for name in dirs:
+                    child_rel = f"{rel}/{name}".strip("/")
+                    children.append(walk_sftp(child_rel))
+                return {
+                    "name": Path(rel).name if rel else "documents",
+                    "rel": rel,
+                    "path": abs_dir,
+                    "children": children,
+                }
+
+            try:
+                return walk_sftp("")
+            finally:
+                sftp.close()
+        finally:
+            client.close()
+
+    def mkdir(self, relative_path: str) -> str:
+        abs_path = self.resolve_under_documents(relative_path)
+        if abs_path == self.documents_dir.rstrip("/"):
+            raise KindleError("Caminho de pasta inválido.")
+        client = self._connect()
+        try:
+            self.ensure_remote_dir(client, abs_path)
+        finally:
+            client.close()
+        return abs_path
+
+    def rename_path(self, relative_path: str, new_name: str) -> str:
+        new_name = (new_name or "").strip().replace("\\", "/").strip("/")
+        if not new_name or "/" in new_name or new_name in (".", "..") or new_name.endswith(".sdr"):
+            raise KindleError("Novo nome inválido.")
+        src = self.resolve_under_documents(relative_path)
+        if src == self.documents_dir.rstrip("/"):
+            raise KindleError("Não é possível renomear a raiz documents.")
+        parent = self._parent_dir(src)
+        dest = f"{parent}/{new_name}"
+        if self.remote_exists(dest):
+            raise KindleError(f"Já existe: {new_name}")
+        self._remote_mv(src, dest)
+        return self.relative_to_documents(dest)
+
+    def move_path(self, relative_src: str, relative_dest_dir: str) -> str:
+        """Move a file or folder into dest dir (same volume rename)."""
+        src = self.resolve_under_documents(relative_src)
+        dest_dir = self.resolve_under_documents(relative_dest_dir)
+        if src == self.documents_dir.rstrip("/"):
+            raise KindleError("Não é possível mover a raiz documents.")
+        name = Path(src).name
+        src_norm = src.rstrip("/")
+        dest_norm = dest_dir.rstrip("/")
+        if dest_norm == src_norm or dest_norm.startswith(src_norm + "/"):
+            raise KindleError("Não é possível mover uma pasta para dentro dela mesma.")
+        dest = f"{dest_norm}/{name}"
+        if dest == src:
+            return self.relative_to_documents(src)
+        if self.remote_exists(dest):
+            raise KindleError(f"Destino já existe: {name}")
+        self._remote_mv(src, dest)
+        return self.relative_to_documents(dest)
+
+    def move_document(self, relative_src: str, relative_dest_dir: str) -> str:
+        """Move a book file and its sibling .sdr folder into dest dir."""
+        src = self.resolve_under_documents(relative_src)
+        dest_dir = self.resolve_under_documents(relative_dest_dir)
+        name = Path(src).name
         stem = Path(name).stem
-        self.remove_remote(f"{docs}/{name}")
-        self.remove_remote(f"{docs}/{stem}.sdr")
+        src_parent = self._parent_dir(src)
+        dest_file = f"{dest_dir.rstrip('/')}/{name}"
+        if dest_file == src:
+            return self.relative_to_documents(src)
+        if self.remote_exists(dest_file):
+            raise KindleError(f"Destino já existe: {name}")
+        sdr_src = f"{src_parent}/{stem}.sdr"
+        sdr_dest = f"{dest_dir.rstrip('/')}/{stem}.sdr"
+        if self.remote_exists(sdr_src) and self.remote_exists(sdr_dest):
+            raise KindleError(f"Pasta .sdr já existe no destino: {stem}.sdr")
+        self._remote_mv(src, dest_file)
+        if self.remote_exists(sdr_src):
+            self._remote_mv(sdr_src, sdr_dest)
+        return self.relative_to_documents(dest_file)
+
+    def _remote_mv(self, src: str, dest: str) -> None:
+        client = self._connect()
+        try:
+            dest_parent = self._parent_dir(dest)
+            self.ensure_remote_dir(client, dest_parent)
+            cmd = f'mv -- "{src}" "{dest}"'
+            stdin, stdout, stderr = client.exec_command(cmd, timeout=self.timeout)
+            exit_status = stdout.channel.recv_exit_status()
+            if exit_status != 0:
+                err = stderr.read().decode("utf-8", errors="replace").strip()
+                sftp = client.open_sftp()
+                try:
+                    sftp.rename(src, dest)
+                except OSError as exc:
+                    raise KindleError(
+                        f"Falha ao mover {src} → {dest}: {err or exc}"
+                    ) from exc
+                finally:
+                    sftp.close()
+        finally:
+            client.close()

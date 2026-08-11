@@ -604,6 +604,85 @@ def library_page():
     )
 
 
+@bp.get("/api/library/browse")
+def api_library_browse():
+    path = request.args.get("path", "") or ""
+    try:
+        data = library_service().browse(path)
+    except KindleError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 502
+    return jsonify({"ok": True, **data})
+
+
+@bp.get("/api/library/tree")
+def api_library_tree():
+    try:
+        tree = library_service().folder_tree()
+    except KindleError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 502
+    return jsonify({"ok": True, "tree": tree})
+
+
+@bp.post("/api/library/folders")
+def api_library_folders_create():
+    payload = request.get_json(silent=True) or {}
+    parent = str(payload.get("parent", "") or "").strip()
+    name = str(payload.get("name", "") or "").strip()
+    if not name:
+        return jsonify({"ok": False, "error": "Nome da pasta obrigatório."}), 400
+    try:
+        data = library_service().create_folder(parent, name)
+    except KindleError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    return jsonify({"ok": True, **data, "message": f"Pasta criada: {name}"})
+
+
+@bp.post("/api/library/move")
+def api_library_move():
+    payload = request.get_json(silent=True) or {}
+    sources = payload.get("sources") or []
+    if isinstance(sources, str):
+        sources = [sources]
+    sources = [str(s).strip() for s in sources if str(s).strip()]
+    dest = str(payload.get("dest", "") or "").strip()
+    if not sources:
+        return jsonify({"ok": False, "error": "Nenhuma origem."}), 400
+    try:
+        result = library_service().move_entries(sources, dest)
+    except KindleError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    return jsonify({"ok": True, **result, "message": "Itens movidos."})
+
+
+@bp.patch("/api/library/rename")
+def api_library_rename():
+    payload = request.get_json(silent=True) or {}
+    path = str(payload.get("path", "") or "").strip()
+    new_name = str(payload.get("new_name", "") or "").strip()
+    if not path or not new_name:
+        return jsonify({"ok": False, "error": "path e new_name obrigatórios."}), 400
+    try:
+        result = library_service().rename_entry(path, new_name)
+    except KindleError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    return jsonify({"ok": True, **result, "message": "Renomeado."})
+
+
+@bp.delete("/api/library/entry")
+def api_library_delete_entry():
+    path = (request.args.get("path") or "").strip()
+    if not path:
+        payload = request.get_json(silent=True) or {}
+        path = str(payload.get("path", "") or "").strip()
+    if not path:
+        return jsonify({"ok": False, "error": "path obrigatório."}), 400
+    try:
+        library_service().delete_entry(path)
+    except KindleError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 502
+    return jsonify({"ok": True, "message": f"Apagado: {path}"})
+
+
 @bp.get("/api/library/books")
 def api_library_books():
     try:
