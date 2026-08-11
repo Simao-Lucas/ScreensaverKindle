@@ -5,17 +5,20 @@
   const breadcrumb = document.getElementById("breadcrumb");
   const listMessage = document.getElementById("listMessage");
   const detailPanel = document.getElementById("detailPanel");
-  const detailTitle = document.getElementById("detailTitle");
   const detailFile = document.getElementById("detailFile");
   const detailMessage = document.getElementById("detailMessage");
   const membership = document.getElementById("membership");
   const dCoverPreview = document.getElementById("dCoverPreview");
   const dCoverFrame = document.getElementById("dCoverFrame");
   const dCoverInput = document.getElementById("dCoverInput");
+  const dFilename = document.getElementById("dFilename");
   const toggleFavBtn = document.getElementById("toggleFavBtn");
   const contextMenu = document.getElementById("contextMenu");
   const cutBtn = document.getElementById("cutBtn");
   const pasteBtn = document.getElementById("pasteBtn");
+  const editBtn = document.getElementById("editBtn");
+  const renameBtn = document.getElementById("renameBtn");
+  const deleteBtn = document.getElementById("deleteBtn");
   const upBtn = document.getElementById("upBtn");
 
   const fields = {
@@ -33,8 +36,10 @@
   let collections = [];
   let current = null;
   let selectedRel = null;
-  let clipboard = null; // { sources: string[] }
+  let clipboard = null;
   let contextTarget = null;
+  let pendingCoverFile = null;
+  let pendingCoverUrl = null;
 
   function setListMessage(text, type = "") {
     listMessage.textContent = text || "";
@@ -70,9 +75,24 @@
     return parts.join("/");
   }
 
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
   function showCover(name, hasCover) {
+    if (pendingCoverUrl) {
+      dCoverPreview.hidden = false;
+      dCoverPreview.src = pendingCoverUrl;
+      dCoverFrame.dataset.empty = "false";
+      return;
+    }
     if (!hasCover) {
       dCoverPreview.hidden = true;
+      dCoverPreview.removeAttribute("src");
       dCoverFrame.dataset.empty = "true";
       return;
     }
@@ -81,14 +101,28 @@
     dCoverFrame.dataset.empty = "false";
   }
 
+  function clearPendingCover() {
+    if (pendingCoverUrl) URL.revokeObjectURL(pendingCoverUrl);
+    pendingCoverFile = null;
+    pendingCoverUrl = null;
+  }
+
   function bookUrl(name, suffix = "") {
     const parts = name.split("/").map(encodeURIComponent).join("/");
     return `/api/library/books/${parts}${suffix}`;
   }
 
-  function updateClipboardUi() {
-    cutBtn.disabled = !selectedRel;
+  function selectedEntry() {
+    return entries.find((e) => e.rel === selectedRel) || null;
+  }
+
+  function updateActionUi() {
+    const entry = selectedEntry();
+    cutBtn.disabled = !entry;
     pasteBtn.disabled = !clipboard || !clipboard.sources.length;
+    renameBtn.disabled = !entry;
+    deleteBtn.disabled = !entry;
+    editBtn.disabled = !(entry && entry.type === "file");
   }
 
   function hideContext() {
@@ -98,9 +132,11 @@
 
   function showContext(x, y, entry) {
     contextTarget = entry;
+    const editItem = contextMenu.querySelector('[data-action="edit"]');
+    if (editItem) editItem.hidden = !(entry && entry.type === "file");
     contextMenu.hidden = false;
     contextMenu.style.left = `${Math.min(x, window.innerWidth - 180)}px`;
-    contextMenu.style.top = `${Math.min(y, window.innerHeight - 220)}px`;
+    contextMenu.style.top = `${Math.min(y, window.innerHeight - 240)}px`;
   }
 
   function renderBreadcrumb(crumbs) {
@@ -135,8 +171,7 @@
     if ((node.rel || "") === currentPath) btn.classList.add("is-active");
     btn.dataset.rel = node.rel || "";
     btn.style.paddingLeft = `${0.5 + depth * 0.85}rem`;
-    btn.innerHTML = `<span class="tree-icon" aria-hidden="true"></span> <span>${node.name}</span>`;
-    btn.draggable = false;
+    btn.innerHTML = `<span class="tree-icon" aria-hidden="true"></span> <span>${escapeHtml(node.name)}</span>`;
     btn.addEventListener("dragover", (e) => {
       e.preventDefault();
       btn.classList.add("drop-target");
@@ -174,18 +209,28 @@
       tr.dataset.rel = entry.rel;
       tr.dataset.type = entry.type;
       tr.draggable = true;
-      const typeLabel = entry.type === "dir" ? "Pasta" : (entry.name.split(".").pop() || "arquivo").toUpperCase();
+      const typeLabel =
+        entry.type === "dir" ? "Pasta" : (entry.name.split(".").pop() || "arquivo").toUpperCase();
       const star = entry.favorite ? " ★" : "";
+      const label = escapeHtml(entry.title || entry.name) + star;
+      const editBtnHtml =
+        entry.type === "file"
+          ? `<button type="button" class="btn ghost row-action" data-row-edit="${escapeHtml(entry.rel)}">Editar</button>`
+          : "";
       tr.innerHTML = `
         <td class="col-name">
           <span class="entry-icon entry-icon-${entry.type}" aria-hidden="true"></span>
-          <span class="entry-label">${entry.title || entry.name}${star}</span>
+          <span class="entry-label">${label}</span>
         </td>
         <td>${typeLabel}</td>
-        <td>${entry.type === "dir" ? "—" : formatSize(entry.size)}</td>`;
+        <td>${entry.type === "dir" ? "—" : formatSize(entry.size)}</td>
+        <td class="col-actions">
+          ${editBtnHtml}
+          <button type="button" class="btn ghost danger-text row-action" data-row-del="${escapeHtml(entry.rel)}" data-row-type="${entry.type}">Excluir</button>
+        </td>`;
       explorerBody.appendChild(tr);
     });
-    updateClipboardUi();
+    updateActionUi();
   }
 
   async function loadCollections() {
@@ -217,7 +262,6 @@
     entries = data.entries || [];
     renderBreadcrumb(data.crumbs || []);
     renderEntries();
-    // refresh active tree highlight
     folderTree.querySelectorAll(".tree-item").forEach((el) => {
       el.classList.toggle("is-active", (el.dataset.rel || "") === currentPath);
     });
@@ -235,7 +279,6 @@
   async function moveTo(sourceRel, destRel) {
     if (!sourceRel) return;
     if (sourceRel === destRel) return;
-    // don't move into self
     if (destRel === sourceRel || destRel.startsWith(sourceRel + "/")) {
       setListMessage("Não é possível mover para dentro de si.", "error");
       return;
@@ -256,22 +299,7 @@
     setListMessage(d.message || "Movido.", "ok");
   }
 
-  async function openBook(name) {
-    setDetailMessage("Abrindo…");
-    detailPanel.hidden = false;
-    const res = await fetch(bookUrl(name));
-    const data = await res.json();
-    if (!res.ok || !data.ok) {
-      setDetailMessage(data.error || "Falha.", "error");
-      return;
-    }
-    current = data.book;
-    detailTitle.textContent = current.metadata.title || current.name;
-    detailFile.textContent = current.path;
-    fillFields(current.metadata || {});
-    showCover(current.name, current.has_cover);
-    toggleFavBtn.textContent = current.favorite ? "Remover dos favoritos" : "Adicionar aos favoritos";
-
+  function renderMembership() {
     membership.innerHTML = "<p class='field-label'>Coleções</p>";
     const wrap = document.createElement("div");
     wrap.className = "membership-toggles";
@@ -280,7 +308,7 @@
       const checked = (current.collections || []).includes(c.name);
       const label = document.createElement("label");
       label.className = "check-row";
-      label.innerHTML = `<input type="checkbox" id="${id}" data-coll="${c.name}" ${checked ? "checked" : ""}/> <span>${c.name === "favorites" ? "Favoritos" : c.name}</span>`;
+      label.innerHTML = `<input type="checkbox" id="${id}" data-coll="${escapeHtml(c.name)}" ${checked ? "checked" : ""}/> <span>${c.name === "favorites" ? "Favoritos" : escapeHtml(c.name)}</span>`;
       wrap.appendChild(label);
     });
     membership.appendChild(wrap);
@@ -300,13 +328,114 @@
           return;
         }
         collections = d.collections || collections;
+        current.collections = collections
+          .filter((c) => (c.files || []).includes(current.path))
+          .map((c) => c.name);
+        current.favorite = current.collections.includes("favorites");
         setDetailMessage("Coleção atualizada. Reinicie o KOReader para ver no aparelho.", "ok");
         if (coll === "favorites") {
           toggleFavBtn.textContent = input.checked ? "Remover dos favoritos" : "Adicionar aos favoritos";
         }
       });
     });
+  }
+
+  async function openBook(name) {
+    clearPendingCover();
+    setDetailMessage("Abrindo…");
+    detailPanel.hidden = false;
+    detailPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+    const res = await fetch(bookUrl(name));
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      setDetailMessage(data.error || "Falha.", "error");
+      return;
+    }
+    current = data.book;
+    detailFile.textContent = current.path;
+    dFilename.value = current.name.split("/").pop();
+    fillFields(current.metadata || {});
+    showCover(current.name, current.has_cover);
+    toggleFavBtn.textContent = current.favorite ? "Remover dos favoritos" : "Adicionar aos favoritos";
+    renderMembership();
     setDetailMessage("");
+  }
+
+  async function applyMetadataOnly() {
+    if (!current) return false;
+    const r = await fetch(bookUrl(current.name, "/metadata"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(collectFields()),
+    });
+    const d = await r.json();
+    if (!r.ok || !d.ok) {
+      setDetailMessage(d.error || "Falha ao salvar metadados.", "error");
+      return false;
+    }
+    current = d.book;
+    return true;
+  }
+
+  async function applyPendingCover() {
+    if (!current || !pendingCoverFile) return true;
+    const body = new FormData();
+    body.append("cover", pendingCoverFile);
+    const r = await fetch(bookUrl(current.name, "/cover"), { method: "POST", body });
+    const d = await r.json();
+    if (!r.ok || !d.ok) {
+      setDetailMessage(d.error || "Falha na capa.", "error");
+      return false;
+    }
+    current = d.book;
+    clearPendingCover();
+    showCover(current.name, true);
+    return true;
+  }
+
+  async function applyRenameIfNeeded() {
+    if (!current) return false;
+    const newName = (dFilename.value || "").trim();
+    const oldName = current.name.split("/").pop();
+    if (!newName || newName === oldName) return true;
+    const r = await fetch("/api/library/rename", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: current.name, new_name: newName }),
+    });
+    const d = await r.json();
+    if (!r.ok || !d.ok) {
+      setDetailMessage(d.error || "Falha ao renomear arquivo.", "error");
+      return false;
+    }
+    current = await (async () => {
+      const res = await fetch(bookUrl(d.rel));
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || "Falha ao recarregar livro");
+      return data.book;
+    })();
+    detailFile.textContent = current.path;
+    dFilename.value = current.name.split("/").pop();
+    return true;
+  }
+
+  async function saveAllToKindle() {
+    if (!current) return;
+    setDetailMessage("Salvando no Kindle…");
+    try {
+      if (!(await applyRenameIfNeeded())) return;
+      if (!(await applyMetadataOnly())) return;
+      if (!(await applyPendingCover())) return;
+      showCover(current.name, current.has_cover);
+      toggleFavBtn.textContent = current.favorite ? "Remover dos favoritos" : "Adicionar aos favoritos";
+      renderMembership();
+      setDetailMessage("Salvo no Kindle (nome, metadados e capa).", "ok");
+      await refreshAll();
+      selectedRel = current.name;
+      renderEntries();
+    } catch (err) {
+      setDetailMessage(err.message || "Falha ao salvar.", "error");
+    }
   }
 
   async function createFolder() {
@@ -340,6 +469,9 @@
       setListMessage(d.error || "Falha ao renomear.", "error");
       return;
     }
+    if (current && current.name === rel) {
+      await openBook(d.rel);
+    }
     await refreshAll();
     setListMessage("Renomeado.", "ok");
   }
@@ -359,12 +491,20 @@
       setListMessage(d.error || "Falha ao excluir.", "error");
       return;
     }
-    if (current && current.name === rel) {
+    if (current && (current.name === rel || current.name.startsWith(rel + "/"))) {
       current = null;
+      clearPendingCover();
       detailPanel.hidden = true;
     }
+    selectedRel = null;
     await refreshAll();
     setListMessage(d.message || "Excluído.", "ok");
+  }
+
+  function deleteCurrentSelection() {
+    const entry = selectedEntry();
+    if (!entry) return;
+    return deleteSelected(entry.rel, entry.type);
   }
 
   // --- events ---
@@ -380,13 +520,25 @@
   });
 
   upBtn.addEventListener("click", () => browse(parentPath(currentPath)));
-  document.getElementById("refreshBtn").addEventListener("click", () => refreshAll().catch((err) => setListMessage(err.message, "error")));
+  document.getElementById("refreshBtn").addEventListener("click", () =>
+    refreshAll().catch((err) => setListMessage(err.message, "error"))
+  );
   document.getElementById("newFolderBtn").addEventListener("click", createFolder);
+
+  editBtn.addEventListener("click", () => {
+    const entry = selectedEntry();
+    if (entry && entry.type === "file") openBook(entry.rel);
+  });
+  renameBtn.addEventListener("click", () => {
+    const entry = selectedEntry();
+    if (entry) renameSelected(entry.rel);
+  });
+  deleteBtn.addEventListener("click", () => deleteCurrentSelection());
 
   cutBtn.addEventListener("click", () => {
     if (!selectedRel) return;
     clipboard = { sources: [selectedRel] };
-    updateClipboardUi();
+    updateActionUi();
     setListMessage(`Recortado: ${selectedRel}`, "ok");
   });
 
@@ -409,6 +561,22 @@
   });
 
   explorerBody.addEventListener("click", (e) => {
+    const edit = e.target.closest("[data-row-edit]");
+    if (edit) {
+      e.stopPropagation();
+      selectedRel = edit.dataset.rowEdit;
+      renderEntries();
+      openBook(edit.dataset.rowEdit);
+      return;
+    }
+    const del = e.target.closest("[data-row-del]");
+    if (del) {
+      e.stopPropagation();
+      selectedRel = del.dataset.rowDel;
+      renderEntries();
+      deleteSelected(del.dataset.rowDel, del.dataset.rowType);
+      return;
+    }
     const row = e.target.closest(".explorer-row");
     if (!row) return;
     selectedRel = row.dataset.rel;
@@ -416,6 +584,7 @@
   });
 
   explorerBody.addEventListener("dblclick", (e) => {
+    if (e.target.closest(".row-action")) return;
     const row = e.target.closest(".explorer-row");
     if (!row) return;
     if (row.dataset.type === "dir") browse(row.dataset.rel);
@@ -489,10 +658,14 @@
       else if (target.type === "file") openBook(target.rel);
       return;
     }
+    if (action === "edit" && target.type === "file") {
+      openBook(target.rel);
+      return;
+    }
     if (action === "cut" && target.rel && target.type !== "pane") {
       clipboard = { sources: [target.rel] };
       selectedRel = target.rel;
-      updateClipboardUi();
+      updateActionUi();
       setListMessage(`Recortado: ${target.rel}`, "ok");
       return;
     }
@@ -522,9 +695,7 @@
       await deleteSelected(target.rel, target.type);
       return;
     }
-    if (action === "mkdir") {
-      await createFolder();
-    }
+    if (action === "mkdir") await createFolder();
   });
 
   document.addEventListener("click", (e) => {
@@ -533,54 +704,40 @@
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") hideContext();
-    if (e.key === "Delete" && selectedRel && document.activeElement.tagName !== "INPUT" && document.activeElement.tagName !== "TEXTAREA") {
-      const entry = entries.find((x) => x.rel === selectedRel);
+    const tag = document.activeElement && document.activeElement.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    if (e.key === "Delete" && selectedRel) {
+      const entry = selectedEntry();
       if (entry) deleteSelected(entry.rel, entry.type);
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "x" && selectedRel) {
       clipboard = { sources: [selectedRel] };
-      updateClipboardUi();
+      updateActionUi();
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v" && clipboard) {
       pasteBtn.click();
     }
   });
 
-  document.getElementById("saveMetaBtn").addEventListener("click", async () => {
+  document.getElementById("saveMetaBtn").addEventListener("click", saveAllToKindle);
+  document.getElementById("applyMetaBtn").addEventListener("click", async () => {
     if (!current) return;
-    setDetailMessage("Salvando…");
-    const r = await fetch(bookUrl(current.name, "/metadata"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(collectFields()),
-    });
-    const d = await r.json();
-    if (!r.ok || !d.ok) {
-      setDetailMessage(d.error || "Falha.", "error");
-      return;
+    setDetailMessage("Aplicando metadados…");
+    if (await applyMetadataOnly()) {
+      setDetailMessage("Metadados aplicados no Kindle.", "ok");
+      await browse(currentPath);
     }
-    current = d.book;
-    detailTitle.textContent = current.metadata.title || current.name;
-    setDetailMessage(d.message || "Salvo.", "ok");
-    await browse(currentPath);
   });
 
   document.getElementById("dCoverBtn").addEventListener("click", () => dCoverInput.click());
-  dCoverInput.addEventListener("change", async () => {
+  dCoverInput.addEventListener("change", () => {
     if (!current || !dCoverInput.files[0]) return;
-    const body = new FormData();
-    body.append("cover", dCoverInput.files[0]);
-    setDetailMessage("Enviando capa…");
-    const r = await fetch(bookUrl(current.name, "/cover"), { method: "POST", body });
-    const d = await r.json();
+    clearPendingCover();
+    pendingCoverFile = dCoverInput.files[0];
+    pendingCoverUrl = URL.createObjectURL(pendingCoverFile);
     dCoverInput.value = "";
-    if (!r.ok || !d.ok) {
-      setDetailMessage(d.error || "Falha na capa.", "error");
-      return;
-    }
-    current = d.book;
     showCover(current.name, true);
-    setDetailMessage(d.message || "Capa ok.", "ok");
+    setDetailMessage("Capa selecionada — use “Salvar no Kindle” para enviar.", "ok");
   });
 
   toggleFavBtn.addEventListener("click", async () => {
@@ -599,6 +756,7 @@
     collections = d.collections;
     current.favorite = add;
     toggleFavBtn.textContent = add ? "Remover dos favoritos" : "Adicionar aos favoritos";
+    renderMembership();
     setDetailMessage("Favoritos atualizados. Reinicie o KOReader.", "ok");
     await browse(currentPath);
   });
@@ -611,6 +769,7 @@
   document.getElementById("closeDetailBtn").addEventListener("click", () => {
     detailPanel.hidden = true;
     current = null;
+    clearPendingCover();
   });
 
   (async () => {

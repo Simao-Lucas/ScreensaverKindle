@@ -16,7 +16,7 @@
     <header class="brand">
       <p class="eyebrow">KOReader · remoto</p>
       <h1>Biblioteca</h1>
-      <p class="lede">Explorador de <code>{{ documents_dir }}</code> no Kindle (<code>{{ host }}</code>). Arraste para mover; pastas <code>.sdr</code> acompanham o livro. Após mudar coleções, reinicie o KOReader.</p>
+      <p class="lede">Explorador de <code>{{ documents_dir }}</code> no Kindle (<code>{{ host }}</code>). Edite livros como no envio, apague pastas/arquivos na lista e arraste para mover. Após mudar coleções, reinicie o KOReader.</p>
     </header>
 
     <section class="explorer-layout">
@@ -31,6 +31,9 @@
           <nav class="breadcrumb" id="breadcrumb" aria-label="Caminho"></nav>
           <div class="explorer-actions">
             <button type="button" class="btn" id="newFolderBtn">Nova pasta</button>
+            <button type="button" class="btn" id="editBtn" disabled>Editar</button>
+            <button type="button" class="btn" id="renameBtn" disabled>Renomear</button>
+            <button type="button" class="btn danger" id="deleteBtn" disabled>Excluir</button>
             <button type="button" class="btn" id="cutBtn" disabled>Recortar</button>
             <button type="button" class="btn" id="pasteBtn" disabled>Colar</button>
             <button type="button" class="btn" id="refreshBtn">Atualizar</button>
@@ -44,6 +47,7 @@
                 <th>Nome</th>
                 <th>Tipo</th>
                 <th>Tamanho</th>
+                <th class="col-actions-head">Ações</th>
               </tr>
             </thead>
             <tbody id="explorerBody"></tbody>
@@ -56,6 +60,7 @@
 
     <div class="context-menu" id="contextMenu" hidden>
       <button type="button" data-action="open">Abrir</button>
+      <button type="button" data-action="edit">Editar</button>
       <button type="button" data-action="cut">Recortar</button>
       <button type="button" data-action="paste">Colar aqui</button>
       <button type="button" data-action="rename">Renomear</button>
@@ -63,10 +68,20 @@
       <button type="button" data-action="mkdir">Nova pasta</button>
     </div>
 
-    <section class="meta-panel detail-panel" id="detailPanel" hidden>
-      <h2 class="meta-heading" id="detailTitle">Livro</h2>
-      <p class="field-hint" id="detailFile"></p>
+    <section class="meta-panel detail-panel" id="detailPanel" hidden aria-label="Editar livro">
+      <h2 class="meta-heading">Editar livro</h2>
+      <p class="field-hint">Mesmas opções do envio: nome do arquivo, metadados, capa (cover.jpg no .sdr) e coleções.</p>
+      <p class="book-ready" id="detailPathReady">
+        No Kindle: <code id="detailFile"></code>
+      </p>
 
+      <div class="book-panel edit-file-panel">
+        <label class="field-label" for="dFilename">Nome do arquivo</label>
+        <input type="text" id="dFilename" class="format-select" spellcheck="false" />
+        <p class="field-hint">Inclui a extensão (ex.: <code>Livro.epub</code>). A pasta <code>.sdr</code> acompanha o novo nome.</p>
+      </div>
+
+      <h3 class="meta-heading meta-subheading">Metadados</h3>
       <div class="meta-grid">
         <label class="field">
           <span class="field-label">Título</span>
@@ -90,7 +105,7 @@
         </label>
         <label class="field">
           <span class="field-label">Idioma</span>
-          <input type="text" id="dLanguage" />
+          <input type="text" id="dLanguage" placeholder="pt / en" />
         </label>
         <label class="field field-span">
           <span class="field-label">Comentários</span>
@@ -100,9 +115,10 @@
 
       <div class="cover-row">
         <div>
-          <p class="field-label">Capa</p>
+          <p class="field-label">Capa (PNG/JPG)</p>
+          <p class="field-hint">Salva como cover.jpg em NomeDoLivro.sdr/ no Kindle.</p>
           <input type="file" id="dCoverInput" accept="image/png,image/jpeg,image/webp,image/bmp,image/gif" hidden />
-          <button type="button" class="btn ghost" id="dCoverBtn">Trocar capa</button>
+          <button type="button" class="btn ghost" id="dCoverBtn">Escolher capa</button>
         </div>
         <figure class="cover-frame" id="dCoverFrame" data-empty="true">
           <img id="dCoverPreview" alt="Capa" hidden />
@@ -113,7 +129,8 @@
       <div class="membership" id="membership"></div>
 
       <div class="controls meta-controls">
-        <button type="button" class="btn primary" id="saveMetaBtn">Salvar metadados</button>
+        <button type="button" class="btn primary" id="saveMetaBtn">Salvar no Kindle</button>
+        <button type="button" class="btn" id="applyMetaBtn">Aplicar metadados</button>
         <button type="button" class="btn" id="toggleFavBtn">Favorito</button>
         <button type="button" class="btn danger" id="deleteBookBtn">Excluir livro</button>
         <button type="button" class="btn ghost" id="closeDetailBtn">Fechar</button>

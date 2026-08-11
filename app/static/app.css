@@ -691,6 +691,41 @@ h1 {
   gap: 0.5rem;
 }
 
+.col-actions-head,
+.col-actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.col-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.row-action {
+  padding: 0.25rem 0.55rem;
+  font-size: 0.8rem;
+}
+
+.edit-file-panel {
+  margin: 1rem 0 1.25rem;
+}
+
+.edit-file-panel input {
+  width: 100%;
+  max-width: 32rem;
+}
+
+.meta-subheading {
+  font-size: 1.15rem;
+  margin-top: 0.5rem;
+}
+
+.detail-panel .book-ready {
+  margin: 0.75rem 0 0;
+}
+
 .explorer-row {
   cursor: default;
 }
